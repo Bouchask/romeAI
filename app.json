@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Campus Room Manager",
+    "slug": "campus-room-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#2563EB"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.campusroommanager.app"
+    },
+    "android": {
+      "package": "com.campusroommanager.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "361f1d6d-ddbe-4447-8194-34ae9e3d4c23"
+      }
+    }
+  }
+}

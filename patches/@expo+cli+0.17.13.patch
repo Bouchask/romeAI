@@ -1,0 +1,21 @@
+diff --git a/node_modules/@expo/cli/build/src/start/server/metro/externals.js b/node_modules/@expo/cli/build/src/start/server/metro/externals.js
+index 8341467..c742024 100644
+--- a/node_modules/@expo/cli/build/src/start/server/metro/externals.js
++++ b/node_modules/@expo/cli/build/src/start/server/metro/externals.js
+@@ -76,10 +76,15 @@ function tapNodeShimContents(moduleId) {
+     return `module.exports = $$require_external('node:${moduleId}');`;
+ }
+ // Ensure Node.js shims which require using `$$require_external` are available inside the project.
++// Use path-safe module id (strip "node:" prefix) so paths like "node:sea" become "sea" on disk - valid on Windows.
++function getPathSafeModuleId(moduleId) {
++    return moduleId.replace(/^node:/, "");
++}
+ async function tapNodeShims(projectRoot) {
+     const externals = {};
+     for (const moduleId of NODE_STDLIB_MODULES){
+-        const shimDir = _path.default.join(projectRoot, METRO_EXTERNALS_FOLDER, moduleId);
++        const pathSafeId = getPathSafeModuleId(moduleId);
++        const shimDir = _path.default.join(projectRoot, METRO_EXTERNALS_FOLDER, pathSafeId);
+         const shimPath = _path.default.join(shimDir, "index.js");
+         externals[moduleId] = shimPath;
+         if (!_fs.default.existsSync(shimPath)) {
