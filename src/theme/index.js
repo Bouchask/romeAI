@@ -5,6 +5,17 @@ export const theme = {
   colors,
   spacing,
   borderRadius,
+  typography: {
+    h1: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
+    h2: { fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
+    h3: { fontSize: 16, fontWeight: '700' },
+    section: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5 },
+    body: { fontSize: 15, fontWeight: '500' },
+    bodySmall: { fontSize: 13, fontWeight: '500' },
+    caption: { fontSize: 11, fontWeight: '600' },
+    statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
+    tabLabel: { fontSize: 12, fontWeight: '600' }
+  },
   shadows: {
     sm: {
       shadowColor: colors.shadowColor,

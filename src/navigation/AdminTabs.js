@@ -21,15 +21,20 @@ export default function AdminTabs() {
             Profile: 'person',
           };
           const iconName = icons[route.name] || 'help';
-          return <Ionicons name={focused ? iconName : `${iconName}-outline`} size={size} color={color} />;
+          return <Ionicons name={focused ? iconName : `${iconName}-outline`} size={22} color={color} />;
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textMuted,
+        tabBarLabelStyle: { 
+          ...theme.typography.tabLabel,
+          marginBottom: 4,
+        },
         tabBarStyle: { 
           backgroundColor: theme.colors.card, 
           borderTopColor: theme.colors.border,
-          height: 60,
-          paddingBottom: 10,
+          height: 65, // Increased height for better label clearance
+          paddingBottom: 8,
+          paddingTop: 8,
         },
         headerShown: false,
       })}

@@ -4,16 +4,24 @@
     "slug": "campus-room-manager",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/data/fpk.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#2563EB"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.campusroommanager.app"
+      "bundleIdentifier": "com.campusroommanager.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.campusroommanager.app"
+      "package": "com.campusroommanager.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/data/fpk.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "extra": {
       "eas": {

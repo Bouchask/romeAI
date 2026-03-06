@@ -9,13 +9,17 @@ export const StatCard = ({ title, value, icon, color = theme.colors.primary, sub
     <Card style={styles.card}>
       <View style={styles.header}>
         <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
-          <Ionicons name={icon} size={22} color={color} />
+          <Ionicons name={icon} size={20} color={color} />
         </View>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        {subtitle && (
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        )}
       </View>
       <View style={styles.content}>
-        <Text style={styles.value}>{value}</Text>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.value} numberOfLines={1}>{value}</Text>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
       </View>
     </Card>
   );
@@ -24,18 +28,19 @@ export const StatCard = ({ title, value, icon, color = theme.colors.primary, sub
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minWidth: 150,
+    minWidth: '45%', // Ensure cards have enough width to prevent vertical letter breaking
+    padding: theme.spacing.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: theme.spacing.md,
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -43,20 +48,19 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
   },
   value: {
-    fontSize: 28,
-    fontWeight: '800',
+    ...theme.typography.statValue,
     color: theme.colors.text,
-    letterSpacing: -1,
   },
   title: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...theme.typography.bodySmall,
     color: theme.colors.textSecondary,
     marginTop: 2,
   },
   subtitle: {
-    fontSize: 12,
+    ...theme.typography.caption,
     color: theme.colors.success,
-    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 8,
   }
 });
