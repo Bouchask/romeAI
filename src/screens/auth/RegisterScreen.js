@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { theme } from '../../theme';
 import { Button } from '../../components/Button';
 import { ROLES } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
+import { ApiService } from '../../services/api';
 
 export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -21,14 +22,37 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState(ROLES.STUDENT);
-  const [field, setField] = useState('');
+  const [filieres, setFilieres] = useState([]);
+  const [selectedFiliere, setSelectedFiliere] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
 
-  const handleRegister = () => {
+  useEffect(() => {
+    const fetchFilieres = async () => {
+      try {
+        const data = await ApiService.getFilieres();
+        setFilieres(data);
+        if (data.length > 0) setSelectedFiliere(data[0].id);
+      } catch (err) {
+        console.error('Failed to fetch filieres:', err);
+      }
+    };
+    fetchFilieres();
+  }, []);
+
+  const handleRegister = async () => {
     if (email && password && password === confirmPassword) {
-      const extra = selectedRole === ROLES.STUDENT ? { filiereId: 'f1' } : {};
-      register(email, password, name, selectedRole, extra);
+      if (selectedRole === ROLES.STUDENT && !selectedFiliere) {
+        alert('Please select a field of study');
+        return;
+      }
+      setLoading(true);
+      const extra = selectedRole === ROLES.STUDENT ? { filiere_id: selectedFiliere } : {};
+      const success = await register(email, password, name, selectedRole, extra);
+      setLoading(false);
+    } else if (password !== confirmPassword) {
+      alert('Passwords do not match');
     }
   };
 
@@ -106,7 +130,48 @@ export default function RegisterScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <Button title="Sign Up" onPress={handleRegister} style={styles.submitBtn} />
+        <Text style={styles.label}>Confirm Password</Text>
+        <View style={styles.inputContainer}>
+          <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textMuted} style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="••••••••"
+            placeholderTextColor={theme.colors.textMuted}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={!showPassword}
+          />
+        </View>
+
+        {selectedRole === ROLES.STUDENT && (
+          <>
+            <Text style={styles.label}>Field of Study (Filiere)</Text>
+            <View style={styles.filiereGrid}>
+              {filieres.map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[
+                    styles.filiereChip,
+                    selectedFiliere === f.id && styles.activeFiliereChip
+                  ]}
+                  onPress={() => setSelectedFiliere(f.id)}
+                >
+                  <Text style={[
+                    styles.filiereChipText,
+                    selectedFiliere === f.id && styles.activeFiliereChipText
+                  ]}>{f.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        <Button 
+          title="Sign Up" 
+          onPress={handleRegister} 
+          loading={loading}
+          style={styles.submitBtn} 
+        />
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
@@ -137,5 +202,10 @@ const styles = StyleSheet.create({
   submitBtn: { marginTop: theme.spacing.xl },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: theme.spacing.xl },
   footerText: { color: theme.colors.textSecondary },
-  link: { color: theme.colors.primary, fontWeight: '700' }
+  link: { color: theme.colors.primary, fontWeight: '700' },
+  filiereGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  filiereChip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: theme.colors.card, borderWidth: 1.5, borderColor: theme.colors.border },
+  activeFiliereChip: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  filiereChipText: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
+  activeFiliereChipText: { color: '#FFF' }
 });

@@ -1,30 +1,71 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { theme } from '../../theme';
 import { Card } from '../../components/Card';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatCard } from '../../components/StatCard';
-import { FILIERES, MODULES } from '../../data/mockData';
-
-const TODAY_CLASSES = [
-  { id: '1', module: 'Algorithms', professor: 'Dr. Jane Smith', room: '101', time: '09:00 - 10:30', status: 'Upcoming' },
-  { id: '2', module: 'Database Systems', professor: 'Prof. John Doe', room: '205', time: '14:00 - 15:30', status: 'Afternoon' },
-];
+import { ApiService } from '../../services/api';
 
 export default function StudentDashboardScreen({ navigation }) {
   const { user } = useAuth();
-  
-  const userName = user?.name?.split(' ')[0] || 'Student';
-  const studentFiliereId = user?.filiereId || 'f1';
-  const filiereObj = FILIERES.find(f => f.id === studentFiliereId);
-  const studentFiliere = filiereObj ? filiereObj.name : 'Computer Science';
+  const [loading, setLoading] = useState(true);
+  const [myModules, setMyModules] = useState([]);
+  const [todayClasses, setTodayClasses] = useState([]);
 
-  const myModules = MODULES.filter(m => m.filiereId === studentFiliereId);
+  const userName = user?.name?.split(' ')[0] || 'Student';
+  const studentFiliere = user?.filiere_name || 'Computer Science';
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [modules, sessions] = await Promise.all([
+        ApiService.getModules(),
+        ApiService.getSessions()
+      ]);
+
+      // Filter modules by student's filiere
+      const filteredModules = modules.filter(m => m.filiere_id === user.filiere_id);
+      setMyModules(filteredModules);
+
+      // Simple today filter: match current day name
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const todayName = dayNames[new Date().getDay()];
+      
+      const todayFiltered = sessions.filter(s => {
+        // Find if this session's module belongs to student's filiere
+        const moduleOfSession = modules.find(m => m.id === s.module_id);
+        return s.day === todayName && moduleOfSession?.filiere_id === user.filiere_id;
+      });
+      
+      setTodayClasses(todayFiltered);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={styles.container} 
+      showsVerticalScrollIndicator={false}
+      onRefresh={fetchData}
+      refreshing={loading}
+    >
       <ScreenHeader 
         title={`Hi, ${userName}!`} 
         subtitle={`Department: ${studentFiliere}`}
@@ -37,57 +78,69 @@ export default function StudentDashboardScreen({ navigation }) {
       
       <View style={styles.content}>
         <View style={styles.statsRow}>
-          <StatCard title="Today's Classes" value="2" icon="calendar" color={theme.colors.primary} />
+          <StatCard title="Today's Classes" value={todayClasses.length.toString()} icon="calendar" color={theme.colors.primary} />
           <StatCard title="My Modules" value={myModules.length.toString()} icon="library" color={theme.colors.success} />
         </View>
 
-        <Text style={styles.sectionTitle}>Today's Schedule</Text>
-        {TODAY_CLASSES.map((c) => (
-          <Card 
-            key={c.id} 
-            style={styles.scheduleCard}
-            onPress={() => navigation?.navigate('SessionDetail', { session: c })}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.moduleInfo}>
-                <Text style={styles.moduleTitle}>{c.module}</Text>
-                <Text style={styles.professorName}>{c.professor}</Text>
-              </View>
-              <View style={[styles.statusBadge, c.status === 'Upcoming' ? styles.upcomingBadge : styles.afternoonBadge]}>
-                <Text style={[styles.statusText, c.status === 'Upcoming' ? styles.upcomingText : styles.afternoonText]}>
-                  {c.status}
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.cardFooter}>
-              <View style={styles.infoItem}>
-                <Ionicons name="location-outline" size={16} color={theme.colors.textMuted} />
-                <Text style={styles.infoText}>{c.room}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Ionicons name="time-outline" size={16} color={theme.colors.textMuted} />
-                <Text style={styles.infoText}>{c.time}</Text>
-              </View>
-            </View>
+        <Text style={styles.sectionTitle}>Today's Schedule ({new Date().toLocaleDateString('en-US', { weekday: 'long' })})</Text>
+        {todayClasses.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No classes scheduled for today.</Text>
           </Card>
-        ))}
+        ) : (
+          todayClasses.map((c) => (
+            <Card 
+              key={c.id} 
+              style={styles.scheduleCard}
+              onPress={() => navigation?.navigate('SessionDetail', { session: c })}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.moduleInfo}>
+                  <Text style={styles.moduleTitle}>{c.module_name}</Text>
+                  <Text style={styles.professorName}>{c.professor_name}</Text>
+                </View>
+                <View style={[styles.statusBadge, styles.upcomingBadge]}>
+                  <Text style={[styles.statusText, styles.upcomingText]}>
+                    {c.type}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.cardFooter}>
+                <View style={styles.infoItem}>
+                  <Ionicons name="location-outline" size={16} color={theme.colors.textMuted} />
+                  <Text style={styles.infoText}>{c.room_name}</Text>
+                </View>
+                <View style={styles.infoItem}>
+                  <Ionicons name="time-outline" size={16} color={theme.colors.textMuted} />
+                  <Text style={styles.infoText}>{c.start_time} - {c.end_time}</Text>
+                </View>
+              </View>
+            </Card>
+          ))
+        )}
 
         <Text style={styles.sectionTitle}>My Learning Path</Text>
         <Card noPadding>
-          {myModules.map((m, i, arr) => (
-            <TouchableOpacity 
-              key={m.id} 
-              style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]}
-              onPress={() => navigation?.navigate('SessionDetail', { session: { module: m.name, room: 'TBA', time: 'Weekly' } })}
-            >
-              <View style={styles.moduleIcon}>
-                <Ionicons name="journal-outline" size={20} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.moduleName}>{m.name}</Text>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          ))}
+          {myModules.length === 0 ? (
+            <View style={styles.emptyPadding}>
+              <Text style={styles.emptyText}>No modules assigned to your department yet.</Text>
+            </View>
+          ) : (
+            myModules.map((m, i, arr) => (
+              <TouchableOpacity 
+                key={m.id} 
+                style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]}
+                onPress={() => navigation?.navigate('SessionDetail', { session: { module_name: m.name, room_name: 'TBA', start_time: 'Weekly' } })}
+              >
+                <View style={styles.moduleIcon}>
+                  <Ionicons name="journal-outline" size={20} color={theme.colors.primary} />
+                </View>
+                <Text style={styles.moduleName}>{m.name}</Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            ))
+          )}
         </Card>
       </View>
     </ScrollView>
@@ -126,4 +179,8 @@ const styles = StyleSheet.create({
   lastItem: { borderBottomWidth: 0 },
   moduleIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: theme.spacing.md },
   moduleName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.colors.text },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  emptyCard: { padding: theme.spacing.xl, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
+  emptyText: { color: theme.colors.textMuted, fontSize: 14, textAlign: 'center' },
+  emptyPadding: { padding: theme.spacing.xl },
 });

@@ -26,11 +26,9 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     if (email && password) {
       setLoading(true);
-      // Simulate network delay
-      setTimeout(() => {
-        login(email, password, selectedRole);
-        setLoading(false);
-      }, 1000);
+      const success = await login(email, password, selectedRole);
+      setLoading(false);
+      // No navigation needed here as App.js RootNavigator will switch based on isAuthenticated
     }
   };
 

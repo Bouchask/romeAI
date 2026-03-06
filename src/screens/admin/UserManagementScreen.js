@@ -1,19 +1,42 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
-import { PROFESSORS, STUDENTS, FILIERES } from '../../data/mockData';
+import { ApiService } from '../../services/api';
 
 export default function UserManagementScreen() {
   const [activeTab, setActiveTab] = useState('Professors');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'Professors') {
+        const profs = await ApiService.getProfessors();
+        setData(profs);
+      } else {
+        const students = await ApiService.getStudents();
+        setData(students);
+      }
+    } catch (err) {
+      Alert.alert('Error', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [activeTab]);
 
   const renderUser = ({ item }) => {
     const isProfessor = activeTab === 'Professors';
     const subtext = isProfessor 
-      ? `${item.modules.length} Modules taught` 
-      : FILIERES.find(f => f.id === item.filiereId)?.name;
+      ? item.email
+      : item.filiere_name || 'No Field';
 
     return (
       <Card style={styles.userCard}>
@@ -37,7 +60,7 @@ export default function UserManagementScreen() {
         title="User Management" 
         subtitle={`Directory of all ${activeTab.toLowerCase()}`}
       />
-      
+
       <View style={styles.tabs}>
         {['Professors', 'Students'].map((tab) => (
           <TouchableOpacity 
@@ -50,82 +73,40 @@ export default function UserManagementScreen() {
         ))}
       </View>
 
-      <FlatList
-        data={activeTab === 'Professors' ? PROFESSORS : STUDENTS}
-        renderItem={renderUser}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={data}
+          renderItem={renderUser}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          onRefresh={loadData}
+          refreshing={loading}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  tabs: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: theme.colors.accent,
-  },
-  activeTab: {
-    backgroundColor: theme.colors.primary,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  activeTabText: {
-    color: '#FFF',
-  },
-  list: {
-    padding: theme.spacing.lg,
-    paddingTop: 0,
-  },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: theme.spacing.md,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.primary,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  userSub: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  actionBtn: {
-    padding: 8,
-  }
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  tabs: { flexDirection: 'row', paddingHorizontal: theme.spacing.lg, marginBottom: theme.spacing.md, gap: theme.spacing.sm },
+  tab: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: theme.colors.accent },
+  activeTab: { backgroundColor: theme.colors.primary },
+  tabText: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  activeTabText: { color: '#FFF' },
+  list: { padding: theme.spacing.lg, paddingTop: 0 },
+  userCard: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
+  userAvatar: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: theme.spacing.md },
+  avatarText: { fontSize: 16, fontWeight: '700', color: theme.colors.primary },
+  userInfo: { flex: 1 },
+  userName: { fontSize: 16, fontWeight: '600', color: theme.colors.text },
+  userSub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
+  actionBtn: { padding: 8 }
 });
+

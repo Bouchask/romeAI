@@ -57,39 +57,38 @@ const styles = StyleSheet.create({
   }
 });
 
+import { initDatabase } from './src/database/initDatabase';
+
 export default function App() {
   const [isReady, setIsReady] = useState(false);
+  const [dbLoaded, setDbLoaded] = useState(false);
 
   useEffect(() => {
-    console.log('App mounting, Platform:', Platform.OS);
-    
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    async function prepare() {
       try {
-        document.body.style.backgroundColor = '#F8FAFC';
-        document.body.style.height = '100vh';
-        document.body.style.margin = '0';
-        document.body.style.overflow = 'hidden';
-        
-        const root = document.getElementById('root');
-        if (root) {
-          root.style.height = '100vh';
-          root.style.display = 'flex';
-          root.style.flexDirection = 'column';
-        }
+        console.log('Initializing database...');
+        await initDatabase();
+        setDbLoaded(true);
       } catch (e) {
-        console.error('Web styling error:', e);
+        console.warn('Database failed to load', e);
       }
     }
-    
-    // Artificial delay to ensure providers are ready
-    const timer = setTimeout(() => setIsReady(true), 100);
-    return () => clearTimeout(timer);
+    prepare();
   }, []);
 
-  if (!isReady) {
+  useEffect(() => {
+    if (dbLoaded) {
+      console.log('App and DB ready, Platform:', Platform.OS);
+      // ... rest of web styling logic
+      const timer = setTimeout(() => setIsReady(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [dbLoaded]);
+
+  if (!isReady || !dbLoaded) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Loading App...</Text>
+        <Text>Initializing Database...</Text>
       </View>
     );
   }
