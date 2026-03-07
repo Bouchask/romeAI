@@ -1,73 +1,173 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Alert, Modal, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
-
-const ROOMS = [
-  { id: '1', name: 'Room 101', capacity: 40, status: 'active', type: 'Lecture Hall' },
-  { id: '2', name: 'Room 102', capacity: 35, status: 'active', type: 'Classroom' },
-  { id: '3', name: 'Room 203', capacity: 30, status: 'maintenance', type: 'Lab' },
-];
+import { ApiService } from '../../services/api';
 
 export default function RoomManagementScreen({ navigation }) {
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <ScreenHeader 
-        title="Classroom Assets" 
-        subtitle="Inventory and facility management" 
-        rightElement={
-          <TouchableOpacity style={styles.addBtnCircle}>
-            <Ionicons name="add" size={24} color="#FFF" />
-          </TouchableOpacity>
-        }
-      />
-      <View style={styles.content}>
-        <View style={styles.summaryRow}>
-          <Text style={styles.countText}>{ROOMS.length} Total Classrooms</Text>
-          <TouchableOpacity><Text style={styles.filterText}>Filter by Status</Text></TouchableOpacity>
-        </View>
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const isFocused = useIsFocused();
+  
+  // Form State
+  const [newName, setNewName] = useState('');
+  const [newCapacity, setNewCapacity] = useState('');
+  const [creating, setCreating] = useState(false);
 
-        {ROOMS.map((r) => (
-          <Card key={r.id} style={styles.roomCard}>
-            <View style={styles.row}>
-              <View style={styles.body}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.name}>{r.name}</Text>
-                  <View style={[styles.statusBadge, r.status === 'maintenance' && styles.statusMaintenance]}>
-                    <Text style={styles.statusText}>{r.status === 'maintenance' ? 'Maintenance' : 'Active'}</Text>
+  const fetchRooms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await ApiService.getRooms();
+      setRooms(data);
+    } catch (err) {
+      console.error('Fetch rooms error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Refresh data whenever screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      fetchRooms();
+    }
+  }, [isFocused, fetchRooms]);
+
+  const handleAddRoom = async () => {
+    if (!newName || !newCapacity) {
+      Alert.alert('Validation', 'Please fill in all fields');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await ApiService.addRoom({
+        name: newName,
+        capacity: parseInt(newCapacity)
+      });
+      setNewName('');
+      setNewCapacity('');
+      setModalVisible(false);
+      fetchRooms();
+      Alert.alert('Success', 'Room created successfully');
+    } catch (err) {
+      Alert.alert('Error', err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (loading && !modalVisible) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <ScreenHeader 
+          title="Classroom Assets" 
+          subtitle="Inventory and facility management" 
+          rightElement={
+            <TouchableOpacity 
+              style={styles.addBtnCircle}
+              onPress={() => setModalVisible(true)}
+            >
+              <Ionicons name="add" size={24} color="#FFF" />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.content}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.countText}>{rooms.length} Total Classrooms</Text>
+          </View>
+
+          {rooms.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No classrooms registered yet.</Text>
+            </Card>
+          ) : (
+            rooms.map((r) => (
+              <Card key={r.id} style={styles.roomCard}>
+                <View style={styles.row}>
+                  <View style={styles.body}>
+                    <View style={styles.titleRow}>
+                      <Text style={styles.name}>{r.name}</Text>
+                      <View style={[styles.statusBadge]}>
+                        <Text style={styles.statusText}>Active</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.typeText}>Standard Classroom · Capacity: {r.capacity}</Text>
+                  </View>
+                  
+                  <View style={styles.actions}>
+                    <TouchableOpacity 
+                      style={styles.actionBtn}
+                      onPress={() => navigation.navigate('ModifyRoom', { room: r })}
+                    >
+                      <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.typeText}>{r.type} · Capacity: {r.capacity}</Text>
-              </View>
-              
-              <View style={styles.actions}>
-                <TouchableOpacity 
-                  style={styles.actionBtn}
-                  onPress={() => navigation.navigate('ModifyRoom', { room: r })}
-                >
-                  <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn}>
-                  <Ionicons name="settings-outline" size={20} color={theme.colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
+              </Card>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Add Room Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Classroom</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
             </View>
-            
-            <View style={styles.footer}>
-              <View style={styles.usageBar}>
-                <View style={[styles.usageFill, { width: r.status === 'active' ? '65%' : '0%' }]} />
-              </View>
-              <Text style={styles.usageText}>Usage: {r.status === 'active' ? '65%' : 'N/A'}</Text>
+
+            <View style={styles.form}>
+              <Text style={styles.label}>Room Name</Text>
+              <TextInput 
+                style={styles.input}
+                placeholder="e.g. Room 101 or Amphi A"
+                value={newName}
+                onChangeText={setNewName}
+              />
+
+              <Text style={styles.label}>Capacity</Text>
+              <TextInput 
+                style={styles.input}
+                placeholder="e.g. 30"
+                keyboardType="numeric"
+                value={newCapacity}
+                onChangeText={setNewCapacity}
+              />
+
+              <Button 
+                title="Create Classroom"
+                onPress={handleAddRoom}
+                loading={creating}
+                style={styles.createBtn}
+              />
             </View>
-          </Card>
-        ))}
-        
-        <Button title="Export Inventory Report" variant="outline" style={styles.exportBtn} />
-      </View>
-    </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -94,4 +194,15 @@ const styles = StyleSheet.create({
   usageFill: { height: '100%', backgroundColor: theme.colors.primary },
   usageText: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '600' },
   exportBtn: { marginTop: theme.spacing.lg },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  emptyCard: { padding: theme.spacing.xl, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
+  emptyText: { color: theme.colors.textMuted, fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: theme.spacing.xl, minHeight: 400 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xl },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: theme.colors.text },
+  form: { gap: theme.spacing.md },
+  label: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  input: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: 12, fontSize: 16, color: theme.colors.text },
+  createBtn: { marginTop: theme.spacing.lg }
 });

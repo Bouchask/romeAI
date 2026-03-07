@@ -1,70 +1,102 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { theme } from '../../theme';
 import { Card } from '../../components/Card';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Button } from '../../components/Button';
-
-const EXAMS = [
-  { id: '1', module: 'Algorithms', room: 'Room 101', filiere: 'Computer Science', date: 'Mar 15', status: 'Published' },
-  { id: '2', module: 'Database Systems', room: 'Room 205', filiere: 'Computer Science', date: 'Mar 18', status: 'Draft' },
-];
+import { ApiService } from '../../services/api';
 
 export default function ExamManagementScreen({ navigation }) {
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const isFocused = useIsFocused();
+
+  const fetchExams = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await ApiService.getExams();
+      setExams(data);
+    } catch (err) {
+      console.error('Fetch exams error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isFocused) {
+      fetchExams();
+    }
+  }, [isFocused, fetchExams]);
+
+  const renderExam = ({ item }) => (
+    <Card 
+      key={item.id} 
+      style={styles.examCard}
+      onPress={() => navigation.navigate('ExamDetail', { exam: item })}
+    >
+      <View style={styles.row}>
+        <View style={styles.iconWrap}>
+          <Ionicons name="document-attach" size={24} color={theme.colors.primary} />
+        </View>
+        <View style={styles.body}>
+          <View style={styles.titleRow}>
+            <Text style={styles.module}>{item.module_name}</Text>
+            <View style={[styles.statusBadge, item.status === 'Draft' && styles.statusDraft]}>
+              <Text style={[styles.statusText, item.status === 'Draft' && styles.statusTextDraft]}>{item.status}</Text>
+            </View>
+          </View>
+          <Text style={styles.meta}>{item.filiere_name} • {item.type}</Text>
+          
+          <View style={styles.footerRow}>
+            <View style={styles.infoItem}>
+              <Ionicons name="calendar-outline" size={14} color={theme.colors.textMuted} />
+              <Text style={styles.infoText}>{item.date}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="location-outline" size={14} color={theme.colors.textMuted} />
+              <Text style={styles.infoText}>{item.room_name}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Card>
+  );
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
       <ScreenHeader 
         title="Exam Control" 
         subtitle="Schedule and oversee formal assessments" 
       />
-      <View style={styles.content}>
-        <Button 
-          title="Create New Exam Session" 
-          icon="add" 
-          style={styles.addBtn} 
-          onPress={() => navigation.navigate('CreateExam')}
-        />
-
-        <Text style={styles.sectionTitle}>Active Schedules</Text>
-        {EXAMS.map((e) => (
-          <Card 
-            key={e.id} 
-            style={styles.examCard}
-            onPress={() => navigation.navigate('ExamDetail', { exam: e })}
-          >
-            <View style={styles.row}>
-              <View style={styles.iconWrap}>
-                <Ionicons name="document-attach" size={24} color={theme.colors.primary} />
-              </View>
-              <View style={styles.body}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.module}>{e.module}</Text>
-                  <View style={[styles.statusBadge, e.status === 'Draft' && styles.statusDraft]}>
-                    <Text style={[styles.statusText, e.status === 'Draft' && styles.statusTextDraft]}>{e.status}</Text>
-                  </View>
-                </View>
-                <Text style={styles.meta}>{e.filiere}</Text>
-                
-                <View style={styles.footerRow}>
-                  <View style={styles.infoItem}>
-                    <Ionicons name="calendar-outline" size={14} color={theme.colors.textMuted} />
-                    <Text style={styles.infoText}>{e.date}</Text>
-                  </View>
-                  <View style={styles.infoItem}>
-                    <Ionicons name="location-outline" size={14} color={theme.colors.textMuted} />
-                    <Text style={styles.infoText}>{e.room}</Text>
-                  </View>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.editBtn}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMuted} />
-              </TouchableOpacity>
+      <FlatList
+        data={exams}
+        renderItem={renderExam}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={
+          <Button 
+            title="Create New Exam Session" 
+            icon="add" 
+            style={styles.addBtn} 
+            onPress={() => navigation.navigate('CreateExam')}
+          />
+        }
+        ListEmptyComponent={
+          !loading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={48} color={theme.colors.border} />
+              <Text style={styles.emptyText}>No exams scheduled yet.</Text>
             </View>
-          </Card>
-        ))}
-      </View>
-    </ScrollView>
+          )
+        }
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={fetchExams} color={theme.colors.primary} />
+        }
+      />
+    </View>
   );
 }
 
@@ -88,4 +120,6 @@ const styles = StyleSheet.create({
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoText: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '500' },
   editBtn: { padding: 4 },
+  emptyState: { alignItems: 'center', marginTop: 60 },
+  emptyText: { marginTop: 16, color: theme.colors.textMuted, fontSize: 15, fontWeight: '500' }
 });

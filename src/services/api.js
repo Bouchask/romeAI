@@ -54,9 +54,12 @@ export const ApiService = {
   
   // Rooms
   getRooms: () => api.get('/rooms').then(res => res.data),
+  addRoom: (data) => api.post('/rooms', data).then(res => res.data),
+  updateRoom: (id, data) => api.put(`/rooms/${id}`, data).then(res => res.data),
   
   // Exams
   getExams: () => api.get('/exams').then(res => res.data),
+  addExam: (data) => api.post('/exams', data).then(res => res.data),
 };
 
 // Global Error Interceptor for user-friendly messages

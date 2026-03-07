@@ -1,20 +1,74 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Switch, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Switch, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { ApiService } from '../../services/api';
 
 export default function ModifyRoomScreen({ navigation, route }) {
-  const { room } = route.params || { room: { name: 'New Room', capacity: 30, type: 'Classroom', status: 'active' } };
-  const [isActive, setIsActive] = useState(room.status === 'active');
+  const { room } = route.params;
+  
+  const [name, setName] = useState(room.name);
+  const [capacity, setCapacity] = useState(room.capacity.toString());
+  const [type, setType] = useState(room.type || 'Classroom');
+  const [status, setStatus] = useState(room.status || 'active');
+  const [hasWifi, setHasWifi] = useState(room.has_wifi ?? true);
+  const [hasProjector, setHasProjector] = useState(room.has_projector ?? true);
+  
+  const [saving, setSaving] = useState(false);
+  const [showTypePicker, setShowTypePicker] = useState(false);
+
+  const roomTypes = ['Classroom', 'TD', 'TP', 'Presentation', 'Amphi', 'Lab'];
+
+  const handleSave = async () => {
+    console.log('Save button clicked');
+    if (!name || !capacity) {
+      const msg = 'Please fill in all required fields';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Error', msg);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const updateData = {
+        name,
+        capacity: parseInt(capacity),
+        type,
+        status,
+        has_wifi: hasWifi,
+        has_projector: hasProjector
+      };
+      console.log('Sending update to API:', room.id, updateData);
+      
+      await ApiService.updateRoom(room.id, updateData);
+      
+      const successMsg = 'Room updated successfully';
+      if (Platform.OS === 'web') {
+        alert(successMsg);
+        navigation.goBack();
+      } else {
+        Alert.alert('Success', successMsg, [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
+    } catch (err) {
+      console.error('Update failed:', err);
+      const errMsg = typeof err === 'string' ? err : 'Failed to update room';
+      if (Platform.OS === 'web') alert(errMsg);
+      else Alert.alert('Error', errMsg);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <ScreenHeader 
-        title="Classroom Assets" 
-        subtitle={`Editing: ${room.name}`} 
+        title="Edit Classroom" 
+        subtitle={`Asset ID: #${room.id}`} 
         showBack={true}
         onBack={() => navigation.goBack()}
       />
@@ -24,20 +78,47 @@ export default function ModifyRoomScreen({ navigation, route }) {
         <Card style={styles.formCard}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Asset Name</Text>
-            <TextInput style={styles.input} defaultValue={room.name} placeholder="e.g. Room 101" />
+            <TextInput 
+              style={styles.input} 
+              value={name} 
+              onChangeText={setName}
+              placeholder="e.g. Room 101" 
+            />
           </View>
           
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Asset Type</Text>
-            <TouchableOpacity style={styles.picker}>
-              <Text style={styles.pickerText}>{room.type || 'Select Type'}</Text>
-              <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
+            <TouchableOpacity 
+              style={styles.picker}
+              onPress={() => setShowTypePicker(!showTypePicker)}
+            >
+              <Text style={styles.pickerText}>{type}</Text>
+              <Ionicons name={showTypePicker ? "chevron-up" : "chevron-down"} size={16} color={theme.colors.textSecondary} />
             </TouchableOpacity>
+            
+            {showTypePicker && (
+              <View style={styles.typeList}>
+                {roomTypes.map((t) => (
+                  <TouchableOpacity 
+                    key={t} 
+                    style={[styles.typeItem, type === t && styles.activeTypeItem]}
+                    onPress={() => { setType(t); setShowTypePicker(false); }}
+                  >
+                    <Text style={[styles.typeItemText, type === t && styles.activeTypeItemText]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Max Capacity</Text>
-            <TextInput style={styles.input} defaultValue={room.capacity?.toString()} keyboardType="numeric" />
+            <TextInput 
+              style={styles.input} 
+              value={capacity} 
+              onChangeText={setCapacity}
+              keyboardType="numeric" 
+            />
           </View>
         </Card>
 
@@ -46,34 +127,50 @@ export default function ModifyRoomScreen({ navigation, route }) {
           <View style={styles.switchRow}>
             <View>
               <Text style={styles.switchTitle}>Availability Status</Text>
-              <Text style={styles.switchSub}>Currently {isActive ? 'Active' : 'Maintenance'}</Text>
+              <Text style={styles.switchSub}>Currently {status === 'active' ? 'Active' : 'Maintenance'}</Text>
             </View>
             <Switch 
-              value={isActive} 
-              onValueChange={setIsActive}
+              value={status === 'active'} 
+              onValueChange={(val) => setStatus(val ? 'active' : 'maintenance')}
               trackColor={{ false: theme.colors.border, true: theme.colors.primaryLight }}
-              thumbColor={isActive ? theme.colors.primary : '#f4f3f4'}
+              thumbColor={status === 'active' ? theme.colors.primary : '#f4f3f4'}
             />
           </View>
           
           <View style={styles.divider} />
 
-          <View style={styles.paramRow}>
-            <Ionicons name="wifi" size={20} color={theme.colors.success} />
-            <Text style={styles.paramText}>Wi-Fi Infrastructure Ready</Text>
-            <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} style={styles.mlAuto} />
+          <View style={styles.switchRow}>
+            <View style={styles.paramInfo}>
+              <Ionicons name="wifi" size={20} color={hasWifi ? theme.colors.success : theme.colors.textMuted} />
+              <Text style={styles.paramText}>Wi-Fi Infrastructure</Text>
+            </View>
+            <Switch 
+              value={hasWifi} 
+              onValueChange={setHasWifi}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primaryLight }}
+            />
           </View>
 
-          <View style={styles.paramRow}>
-            <Ionicons name="videocam" size={20} color={theme.colors.primary} />
-            <Text style={styles.paramText}>Multimedia Projector</Text>
-            <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} style={styles.mlAuto} />
+          <View style={[styles.switchRow, { marginTop: 12 }]}>
+            <View style={styles.paramInfo}>
+              <Ionicons name="videocam" size={20} color={hasProjector ? theme.colors.primary : theme.colors.textMuted} />
+              <Text style={styles.paramText}>Multimedia Projector</Text>
+            </View>
+            <Switch 
+              value={hasProjector} 
+              onValueChange={setHasProjector}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primaryLight }}
+            />
           </View>
         </Card>
 
         <View style={styles.footer}>
-          <Button title="Save Asset Changes" onPress={() => navigation.goBack()} />
-          <TouchableOpacity style={styles.deleteBtn}>
+          <Button 
+            title="Save Asset Changes" 
+            onPress={handleSave} 
+            loading={saving}
+          />
+          <TouchableOpacity style={styles.deleteBtn} disabled={saving}>
             <Text style={styles.deleteText}>Decommission Asset</Text>
           </TouchableOpacity>
         </View>
@@ -92,14 +189,18 @@ const styles = StyleSheet.create({
   input: { backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, fontSize: 15, color: theme.colors.text, borderWidth: 1, borderColor: theme.colors.border },
   picker: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border },
   pickerText: { fontSize: 15, color: theme.colors.text },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  typeList: { marginTop: 8, backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
+  typeItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  activeTypeItem: { backgroundColor: theme.colors.primaryLight },
+  typeItemText: { fontSize: 14, color: theme.colors.text },
+  activeTypeItemText: { color: theme.colors.primary, fontWeight: '700' },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
   switchSub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
   divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.md },
-  paramRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  paramInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   paramText: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
-  mlAuto: { marginLeft: 'auto' },
-  footer: { marginTop: theme.spacing.xl, gap: theme.spacing.md },
+  footer: { marginTop: theme.spacing.xl, gap: theme.spacing.md, paddingBottom: 40 },
   deleteBtn: { alignItems: 'center', paddingVertical: 12 },
   deleteText: { color: theme.colors.error, fontWeight: '600', fontSize: 14 },
 });

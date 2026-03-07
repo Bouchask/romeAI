@@ -3,6 +3,20 @@ from .models import db, Student, Professor, Filiere, Module, Room, Exam, Admin, 
 
 api_bp = Blueprint('api', __name__)
 
+# --- Departments ---
+@api_bp.route('/departments', methods=['GET'])
+def get_departments():
+    deps = Department.query.all()
+    return jsonify([d.to_dict() for d in deps])
+
+@api_bp.route('/departments', methods=['POST'])
+def add_department():
+    data = request.json
+    new_dep = Department(name=data['name'])
+    db.session.add(new_dep)
+    db.session.commit()
+    return jsonify(new_dep.to_dict()), 201
+
 # --- Sessions ---
 @api_bp.route('/sessions', methods=['GET'])
 def get_sessions():
@@ -160,6 +174,19 @@ def add_room():
     db.session.commit()
     return jsonify(new_room.to_dict()), 201
 
+@api_bp.route('/rooms/<int:id>', methods=['PUT'])
+def update_room(id):
+    room = Room.query.get_or_404(id)
+    data = request.json
+    room.name = data.get('name', room.name)
+    room.capacity = data.get('capacity', room.capacity)
+    room.type = data.get('type', room.type)
+    room.status = data.get('status', room.status)
+    room.has_wifi = data.get('has_wifi', room.has_wifi)
+    room.has_projector = data.get('has_projector', room.has_projector)
+    db.session.commit()
+    return jsonify(room.to_dict())
+
 # --- Exams ---
 @api_bp.route('/exams', methods=['GET'])
 def get_exams():
@@ -169,10 +196,33 @@ def get_exams():
 @api_bp.route('/exams', methods=['POST'])
 def add_exam():
     data = request.json
-    new_exam = Exam(module_id=data['module_id'], room_id=data['room_id'], date=data['date'])
-    db.session.add(new_exam)
-    db.session.commit()
-    return jsonify(new_exam.to_dict()), 201
+    print(f"DEBUG: Incoming Exam Data: {data}")
+    
+    try:
+        # Get required IDs and ensure they are integers
+        mid = data.get('module_id')
+        rid = data.get('room_id')
+        
+        if not mid or not rid:
+            return jsonify({"message": "Module ID and Room ID are required"}), 400
+
+        new_exam = Exam(
+            module_id=int(mid), 
+            room_id=int(rid), 
+            date=data.get('date', '2024-01-01'),
+            start_time=data.get('start_time', '09:00'),
+            end_time=data.get('end_time', '11:00'),
+            type=data.get('type', 'Normal'),
+            status=data.get('status', 'Published')
+        )
+        db.session.add(new_exam)
+        db.session.commit()
+        print(f"DEBUG: Created Exam ID: {new_exam.id}")
+        return jsonify(new_exam.to_dict()), 201
+    except Exception as e:
+        print(f"DEBUG: Exception in add_exam: {str(e)}")
+        db.session.rollback()
+        return jsonify({"message": f"Server Error: {str(e)}"}), 500
 
 # --- Filieres ---
 @api_bp.route('/filieres', methods=['GET'])
