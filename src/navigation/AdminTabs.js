@@ -1,10 +1,9 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import UserManagementScreen from '../screens/admin/UserManagementScreen';
 import AdminProfileScreen from '../screens/admin/AdminProfileScreen';
 import { theme } from '../theme';
-import { HomeStack, RoomsStack, ExamsStack } from './AdminStack';
+import { HomeStack, RoomsStack, ExamsStack, UsersStack } from './AdminStack';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,7 +31,7 @@ export default function AdminTabs() {
         tabBarStyle: { 
           backgroundColor: theme.colors.card, 
           borderTopColor: theme.colors.border,
-          height: 65, // Increased height for better label clearance
+          height: 65,
           paddingBottom: 8,
           paddingTop: 8,
         },
@@ -42,7 +41,7 @@ export default function AdminTabs() {
       <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Rooms" component={RoomsStack} />
       <Tab.Screen name="Exams" component={ExamsStack} />
-      <Tab.Screen name="Users" component={UserManagementScreen} options={{ title: 'Users' }} />
+      <Tab.Screen name="Users" component={UsersStack} />
       <Tab.Screen name="Profile" component={AdminProfileScreen} />
     </Tab.Navigator>
   );

@@ -75,6 +75,7 @@ class Student(db.Model):
             "department_name": self.filiere_obj.department_obj.name if self.filiere_obj and self.filiere_obj.department_obj else "None"
         }
 
+
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)

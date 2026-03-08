@@ -38,6 +38,8 @@ export const ApiService = {
   // Professors
   getProfessors: () => api.get('/professors').then(res => res.data),
   addProfessor: (data) => api.post('/professors', data).then(res => res.data),
+  updateProfessor: (id, data) => api.put(`/professors/${id}`, data).then(res => res.data),
+  deleteProfessor: (id) => api.delete(`/professors/${id}`).then(res => res.data),
 
   // Admins
   getAdmins: () => api.get('/admins').then(res => res.data),

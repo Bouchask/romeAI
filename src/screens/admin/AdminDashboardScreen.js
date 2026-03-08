@@ -17,16 +17,17 @@ export default function AdminDashboardScreen({ navigation }) {
     rooms: 0,
     modules: 0
   });
-  const [recentModules, setRecentModules] = useState([]);
+  const [filieres, setFilieres] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [students, professors, rooms, modules] = await Promise.all([
+      const [students, professors, rooms, modules, filiereData] = await Promise.all([
         ApiService.getStudents(),
         ApiService.getProfessors(),
         ApiService.getRooms(),
-        ApiService.getModules()
+        ApiService.getModules(),
+        ApiService.getFilieres()
       ]);
 
       setStats({
@@ -36,7 +37,7 @@ export default function AdminDashboardScreen({ navigation }) {
         modules: modules.length
       });
       
-      setRecentModules(modules.slice(-4).reverse());
+      setFilieres(filiereData);
     } catch (err) {
       console.error('Error fetching admin stats:', err);
     } finally {
@@ -122,26 +123,31 @@ export default function AdminDashboardScreen({ navigation }) {
             </View>
 
             <View style={[styles.rowHeader, { marginTop: theme.spacing.xl }]}>
-              <Text style={styles.sectionTitle}>Recent Modules</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Exams')}>
-                <Text style={styles.seeAll}>See All</Text>
-              </TouchableOpacity>
+              <Text style={styles.sectionTitle}>Academic Departments (Filieres)</Text>
             </View>
             
-            {recentModules.map((item) => (
-              <Card key={item.id} style={styles.moduleCard}>
-                <View style={styles.moduleRow}>
-                  <View style={styles.moduleIconBox}>
-                    <Ionicons name="book" size={20} color={theme.colors.primary} />
+            {filieres.length === 0 ? (
+              <Text style={styles.emptyText}>No filieres registered.</Text>
+            ) : (
+              filieres.map((item) => (
+                <Card 
+                  key={item.id} 
+                  style={styles.moduleCard}
+                  onPress={() => navigation.navigate('FiliereModules', { filiere: item })}
+                >
+                  <View style={styles.moduleRow}>
+                    <View style={styles.moduleIconBox}>
+                      <Ionicons name="business" size={20} color={theme.colors.primary} />
+                    </View>
+                    <View style={styles.moduleInfo}>
+                      <Text style={styles.moduleName}>{item.name}</Text>
+                      <Text style={styles.moduleSub}>{item.department_name || 'Faculty Member'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
                   </View>
-                  <View style={styles.moduleInfo}>
-                    <Text style={styles.moduleName}>{item.name}</Text>
-                    <Text style={styles.moduleSub}>{item.department_name || 'General Faculty'}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-                </View>
-              </Card>
-            ))}
+                </Card>
+              ))
+            )}
           </View>
         </View>
       </View>
@@ -171,5 +177,6 @@ const styles = StyleSheet.create({
   moduleIconBox: { width: 40, height: 40, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' },
   moduleInfo: { flex: 1 },
   moduleName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  moduleSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }
+  moduleSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
+  emptyText: { color: theme.colors.textMuted, textAlign: 'center', marginTop: 20 }
 });

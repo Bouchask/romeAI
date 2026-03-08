@@ -155,10 +155,55 @@ def add_professor():
        Admin.query.filter_by(email=email).first():
         return jsonify({"message": "This email is already registered."}), 400
 
-    new_prof = Professor(name=data['name'], email=email)
+    new_prof = Professor(
+        name=data['name'], 
+        email=email,
+        department_id=data.get('department_id')
+    )
     db.session.add(new_prof)
+    db.session.flush() # Get prof ID
+
+    # If a module was selected, link it
+    module_id = data.get('module_id')
+    if module_id:
+        mod = Module.query.get(module_id)
+        if mod:
+            mod.professor_id = new_prof.id
+
     db.session.commit()
     return jsonify(new_prof.to_dict()), 201
+
+@api_bp.route('/professors/<int:id>', methods=['PUT'])
+def update_professor(id):
+    prof = Professor.query.get_or_404(id)
+    data = request.json
+    prof.name = data.get('name', prof.name)
+    prof.email = data.get('email', prof.email)
+    prof.department_id = data.get('department_id', prof.department_id)
+    
+    # Update module link if provided
+    module_id = data.get('module_id')
+    if module_id:
+        # Clear old links if any (simple logic: one module per prof for this demo)
+        old_mods = Module.query.filter_by(professor_id=prof.id).all()
+        for m in old_mods: m.professor_id = None
+        
+        new_mod = Module.query.get(module_id)
+        if new_mod: new_mod.professor_id = prof.id
+
+    db.session.commit()
+    return jsonify(prof.to_dict())
+
+@api_bp.route('/professors/<int:id>', methods=['DELETE'])
+def delete_professor(id):
+    prof = Professor.query.get_or_404(id)
+    # Clear module associations before deleting
+    mods = Module.query.filter_by(professor_id=prof.id).all()
+    for m in mods: m.professor_id = None
+    
+    db.session.delete(prof)
+    db.session.commit()
+    return '', 204
 
 # --- Rooms ---
 @api_bp.route('/rooms', methods=['GET'])
