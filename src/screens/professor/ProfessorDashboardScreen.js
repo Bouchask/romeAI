@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { theme } from '../../theme';
 import { Card } from '../../components/Card';
@@ -8,141 +9,126 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatCard } from '../../components/StatCard';
 import { ApiService } from '../../services/api';
 
+const getNavigatorDays = () => {
+  const days = [];
+  let current = new Date();
+  for (let i = 0; i < 7; i++) {
+    const temp = new Date(current);
+    temp.setDate(current.getDate() + i);
+    const dayName = temp.toLocaleDateString('en-US', { weekday: 'short' });
+    const year = temp.getFullYear();
+    const month = String(temp.getMonth() + 1).padStart(2, '0');
+    const day = String(temp.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    days.push({ id: i, label: i === 0 ? 'Today' : dayName, date: dateStr, fullDay: temp.toLocaleDateString('en-US', { weekday: 'long' }) });
+  }
+  return days;
+};
+
 export default function ProfessorDashboardScreen({ navigation }) {
   const { user } = useAuth();
+  const isFocused = useIsFocused();
   const [loading, setLoading] = useState(true);
-  const [myModules, setMyModules] = useState([]);
-  const [todaySessions, setTodaySessions] = useState([]);
+  const [allSessions, setAllSessions] = useState([]);
+  const [myDepartments, setMyDepartments] = useState([]);
+  const [stats, setStats] = useState({ today: 0, total: 0 });
+  
+  const navigatorDays = useMemo(() => getNavigatorDays(), []);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [modules, sessions] = await Promise.all([
+      const [modules, sessions, departments] = await Promise.all([
         ApiService.getModules(),
-        ApiService.getSessions()
+        ApiService.getSessions(),
+        ApiService.getDepartments()
       ]);
 
-      // Filter modules taught by this professor
-      const filteredModules = modules.filter(m => m.professor_id === user.id);
-      setMyModules(filteredModules);
-
-      // Filter today's sessions for this professor
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const todayName = dayNames[new Date().getDay()];
+      const myModules = modules.filter(m => m.professor_id === user.id);
       
-      const filteredSessions = sessions.filter(s => {
-        const mod = modules.find(m => m.id === s.module_id);
-        return s.day === todayName && mod?.professor_id === user.id;
+      // LOGIC FIX: Map unique departments directly from the module's department_id
+      const myDepIds = [...new Set(myModules.map(m => m.department_id).filter(id => id !== null))];
+      const filteredDeps = departments.filter(d => myDepIds.includes(d.id));
+      setMyDepartments(filteredDeps);
+
+      // Sessions for this prof
+      const profSessions = sessions.filter(s => s.professor_id === user.id);
+      setAllSessions(profSessions);
+
+      const todayStr = navigatorDays[0].date;
+      setStats({
+        today: profSessions.filter(s => s.date === todayStr).length,
+        total: myModules.length
       });
-      setTodaySessions(filteredSessions);
     } catch (err) {
-      console.error('Error fetching professor dashboard:', err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user.id, navigatorDays]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { if (isFocused) fetchData(); }, [isFocused, fetchData]);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
+  const activeDay = navigatorDays[selectedDayIndex];
+  const displayedAgenda = useMemo(() => {
+    return allSessions.filter(s => s.date === activeDay.date || (!s.date && s.day === activeDay.fullDay));
+  }, [allSessions, activeDay]);
+
+  if (loading && !myDepartments.length && !allSessions.length) return <View style={styles.center}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      onRefresh={fetchData}
-      refreshing={loading}
-    >
-      <ScreenHeader 
-        title={`Welcome, ${user?.name?.split(' ')[0] || 'Professor'}`} 
-        subtitle={user?.department_name || "Faculty Member"}
-        rightElement={
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name?.substring(0, 2).toUpperCase()}</Text>
-          </View>
-        }
-      />
-      
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
+      <ScreenHeader title={`Welcome, ${user?.name?.split(' ')[0]}`} subtitle="Departmental Oversight" />
       <View style={styles.content}>
         <View style={styles.statsRow}>
-          <StatCard title="Today's Classes" value={todaySessions.length.toString()} icon="time" color={theme.colors.primary} />
-          <StatCard title="Total Modules" value={myModules.length.toString()} icon="book" color={theme.colors.success} />
+          <StatCard title="Today's Load" value={stats.today.toString()} icon="time" color={theme.colors.primary} />
+          <StatCard title="My Modules" value={stats.total.toString()} icon="book" color={theme.colors.success} />
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Upcoming Sessions Today</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Agenda Navigator</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roulette}>
+          {navigatorDays.map((d, index) => (
+            <TouchableOpacity key={d.id} style={[styles.dayTab, selectedDayIndex === index && styles.activeDayTab]} onPress={() => setSelectedDayIndex(index)}>
+              <Text style={[styles.dayLabel, selectedDayIndex === index && styles.activeDayLabel]}>{d.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {todaySessions.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No sessions scheduled for today.</Text>
-          </Card>
+        {displayedAgenda.length === 0 ? (
+          <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for {activeDay.label}.</Text></Card>
         ) : (
-          todaySessions.map((s) => (
-            <Card 
-              key={s.id} 
-              style={styles.sessionCard}
-              onPress={() => navigation.navigate('SessionDetail', { session: s })}
-            >
-              <View style={styles.sessionHeader}>
-                <View style={styles.moduleBadge}>
-                  <Ionicons name="school" size={16} color={theme.colors.primary} />
-                  <Text style={styles.moduleText}>{s.module_name}</Text>
+          displayedAgenda.map(session => (
+            <Card key={session.id} style={styles.agendaCard} onPress={() => navigation.navigate('ProfessorModuleDetail', { module: { id: session.module_id, name: session.module_name } })}>
+              <View style={styles.agendaRow}>
+                <View style={styles.timeLabel}><Text style={styles.startText}>{session.start_time}</Text></View>
+                <View style={styles.agendaBody}>
+                  <Text style={styles.agendaModule}>{session.module_name}</Text>
+                  <Text style={styles.locText}>{session.room_name} · {session.type}</Text>
                 </View>
-                <View style={styles.typeBadge}>
-                  <Text style={styles.typeText}>{s.type}</Text>
-                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('AttendanceManagement', { session })}>
+                  <Ionicons name="checkbox" size={24} color={theme.colors.primary} />
+                </TouchableOpacity>
               </View>
-
-              <View style={styles.sessionBody}>
-                <View style={styles.timeInfo}>
-                  <Text style={styles.timeText}>{s.start_time} - {s.end_time}</Text>
-                  <View style={styles.locationRow}>
-                    <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
-                    <Text style={styles.locationText}>Room {s.room_name}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.actionBtn}
-                onPress={() => navigation.navigate('AttendanceManagement', { session: s })}
-              >
-                <Text style={styles.actionBtnText}>Manage Attendance</Text>
-                <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
-              </TouchableOpacity>
             </Card>
           ))
         )}
 
-        <Text style={styles.sectionTitle}>My Modules</Text>
-        <View style={styles.modulesGrid}>
-          {myModules.length === 0 ? (
-            <Text style={styles.emptyText}>No modules assigned yet.</Text>
-          ) : (
-            myModules.map((m) => (
-              <Card 
-                key={m.id} 
-                style={styles.moduleCard}
-                onPress={() => navigation.navigate('ModuleSessions', { module: m })}
-              >
-                <View style={styles.moduleIcon}>
-                  <Ionicons name="library" size={20} color={theme.colors.primary} />
+        <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Your Academic Departments</Text>
+        {myDepartments.length === 0 ? <Text style={styles.emptyText}>No departments assigned.</Text> :
+          myDepartments.map(dep => (
+            <Card key={dep.id} style={styles.depCard} onPress={() => navigation.navigate('ProfessorFilieres', { department: dep })}>
+              <View style={styles.row}>
+                <View style={styles.iconBox}><Ionicons name="business" size={22} color={theme.colors.primary} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.depName}>{dep.name}</Text>
+                  <Text style={styles.depSub}>Manage your programs here</Text>
                 </View>
-                <Text style={styles.moduleName} numberOfLines={1}>{m.name}</Text>
-                <Text style={styles.moduleSub}>{user.department_name}</Text>
-              </Card>
-            ))
-          )}
-        </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+              </View>
+            </Card>
+          ))
+        }
       </View>
     </ScrollView>
   );
@@ -150,35 +136,27 @@ export default function ProfessorDashboardScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  content: { padding: theme.spacing.lg },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  statsRow: { flexDirection: 'row', gap: theme.spacing.md, marginBottom: theme.spacing.lg },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md, marginTop: theme.spacing.sm },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.text },
-  seeAll: { fontSize: 14, color: theme.colors.primary, fontWeight: '600' },
-  sessionCard: { marginBottom: theme.spacing.md, padding: theme.spacing.md },
-  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
-  moduleBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  moduleText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-  typeBadge: { backgroundColor: theme.colors.accent, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  typeText: { fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary },
-  sessionBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  timeText: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  locationText: { fontSize: 13, color: theme.colors.textSecondary },
-  studentInfo: { alignItems: 'flex-end' },
-  studentAvatars: { flexDirection: 'row', marginBottom: 4 },
-  miniAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.colors.border, borderWidth: 2, borderColor: '#FFF' },
-  studentCount: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '500' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: theme.spacing.md },
-  actionBtnText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
-  modulesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md, marginTop: theme.spacing.xs },
-  moduleCard: { flex: 1, minWidth: 140, alignItems: 'center', padding: theme.spacing.md },
-  moduleIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm },
-  moduleName: { fontSize: 14, fontWeight: '700', color: theme.colors.text, textAlign: 'center' },
-  moduleSub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  content: { padding: theme.spacing.lg, paddingBottom: 40 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyCard: { padding: theme.spacing.xl, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
-  emptyText: { color: theme.colors.textMuted, fontSize: 14, textAlign: 'center' },
+  statsRow: { flexDirection: 'row', gap: theme.spacing.md },
+  sectionTitle: { fontSize: 13, fontWeight: '800', color: theme.colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 24, marginBottom: 12 },
+  roulette: { flexDirection: 'row', marginBottom: 16 },
+  dayTab: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: theme.colors.card, borderRadius: 12, marginRight: 10, borderWidth: 1, borderColor: theme.colors.border },
+  activeDayTab: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  dayLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.textSecondary },
+  activeDayLabel: { color: '#FFF' },
+  agendaCard: { marginBottom: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: theme.colors.primary },
+  agendaRow: { flexDirection: 'row', alignItems: 'center' },
+  timeLabel: { width: 70 },
+  startText: { fontSize: 14, fontWeight: '800' },
+  agendaBody: { flex: 1 },
+  agendaModule: { fontSize: 15, fontWeight: '700' },
+  locText: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 },
+  depCard: { marginBottom: 10, padding: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  depName: { fontSize: 16, fontWeight: '700' },
+  depSub: { fontSize: 12, color: theme.colors.textSecondary },
+  emptyCard: { padding: 30, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
+  emptyText: { color: theme.colors.textMuted, fontSize: 14, textAlign: 'center' }
 });

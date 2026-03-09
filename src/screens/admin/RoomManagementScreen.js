@@ -17,6 +17,7 @@ export default function RoomManagementScreen({ navigation }) {
   // Form State
   const [newName, setNewName] = useState('');
   const [newCapacity, setNewCapacity] = useState('');
+  const [newLienGps, setNewLienGps] = useState('');
   const [creating, setCreating] = useState(false);
 
   const fetchRooms = useCallback(async () => {
@@ -40,7 +41,7 @@ export default function RoomManagementScreen({ navigation }) {
 
   const handleAddRoom = async () => {
     if (!newName || !newCapacity) {
-      Alert.alert('Validation', 'Please fill in all fields');
+      Alert.alert('Validation', 'Please fill in required fields (Name, Capacity)');
       return;
     }
 
@@ -48,10 +49,12 @@ export default function RoomManagementScreen({ navigation }) {
     try {
       await ApiService.addRoom({
         name: newName,
-        capacity: parseInt(newCapacity)
+        capacity: parseInt(newCapacity),
+        lien_gps: newLienGps
       });
       setNewName('');
       setNewCapacity('');
+      setNewLienGps('');
       setModalVisible(false);
       fetchRooms();
       Alert.alert('Success', 'Room created successfully');
@@ -101,11 +104,44 @@ export default function RoomManagementScreen({ navigation }) {
                   <View style={styles.body}>
                     <View style={styles.titleRow}>
                       <Text style={styles.name}>{r.name}</Text>
-                      <View style={[styles.statusBadge]}>
-                        <Text style={styles.statusText}>Active</Text>
+                      <View style={[
+                        styles.statusBadge, 
+                        r.status !== 'active' && styles.statusMaintenance
+                      ]}>
+                        <Text style={[
+                          styles.statusText,
+                          r.status !== 'active' && styles.statusTextMaintenance
+                        ]}>
+                          {r.status === 'active' ? 'Active' : 'Maintenance'}
+                        </Text>
                       </View>
                     </View>
-                    <Text style={styles.typeText}>Standard Classroom · Capacity: {r.capacity}</Text>
+                    <Text style={styles.typeText}>{r.type || 'Standard'} · Capacity: {r.capacity}</Text>
+                    
+                    <View style={styles.amenitiesRow}>
+                      <View style={styles.amenity}>
+                        <Ionicons 
+                          name="wifi" 
+                          size={14} 
+                          color={r.has_wifi ? theme.colors.success : theme.colors.textMuted} 
+                        />
+                        <Text style={[styles.amenityText, !r.has_wifi && styles.disabledText]}>Wi-Fi</Text>
+                      </View>
+                      <View style={styles.amenity}>
+                        <Ionicons 
+                          name="videocam" 
+                          size={14} 
+                          color={r.has_projector ? theme.colors.primary : theme.colors.textMuted} 
+                        />
+                        <Text style={[styles.amenityText, !r.has_projector && styles.disabledText]}>Projector</Text>
+                      </View>
+                      {r.lien_gps && (
+                        <View style={styles.amenity}>
+                          <Ionicons name="map" size={14} color={theme.colors.primary} />
+                          <Text style={styles.amenityText}>GPS Linked</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   
                   <View style={styles.actions}>
@@ -139,31 +175,42 @@ export default function RoomManagementScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.form}>
-              <Text style={styles.label}>Room Name</Text>
-              <TextInput 
-                style={styles.input}
-                placeholder="e.g. Room 101 or Amphi A"
-                value={newName}
-                onChangeText={setNewName}
-              />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.form}>
+                <Text style={styles.label}>Room Name</Text>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="e.g. Room 101 or Amphi A"
+                  value={newName}
+                  onChangeText={setNewName}
+                />
 
-              <Text style={styles.label}>Capacity</Text>
-              <TextInput 
-                style={styles.input}
-                placeholder="e.g. 30"
-                keyboardType="numeric"
-                value={newCapacity}
-                onChangeText={setNewCapacity}
-              />
+                <Text style={styles.label}>Capacity</Text>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="e.g. 30"
+                  keyboardType="numeric"
+                  value={newCapacity}
+                  onChangeText={setNewCapacity}
+                />
 
-              <Button 
-                title="Create Classroom"
-                onPress={handleAddRoom}
-                loading={creating}
-                style={styles.createBtn}
-              />
-            </View>
+                <Text style={styles.label}>GPS Link (Maps URL)</Text>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="https://maps.google.com/..."
+                  value={newLienGps}
+                  onChangeText={setNewLienGps}
+                  autoCapitalize="none"
+                />
+
+                <Button 
+                  title="Create Classroom"
+                  onPress={handleAddRoom}
+                  loading={creating}
+                  style={styles.createBtn}
+                />
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -186,7 +233,12 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 13, color: theme.colors.textSecondary },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: theme.colors.success + '15' },
   statusMaintenance: { backgroundColor: theme.colors.warning + '15' },
-  statusText: { fontSize: 10, fontWeight: '700', color: theme.colors.text, textTransform: 'uppercase' },
+  statusText: { fontSize: 10, fontWeight: '700', color: theme.colors.success, textTransform: 'uppercase' },
+  statusTextMaintenance: { color: theme.colors.warning },
+  amenitiesRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  amenity: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  amenityText: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' },
+  disabledText: { color: theme.colors.textMuted, textDecorationLine: 'line-through' },
   actions: { flexDirection: 'row', gap: 4 },
   actionBtn: { padding: 8, borderRadius: 8, backgroundColor: theme.colors.accent },
   footer: { marginTop: theme.spacing.md, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
@@ -203,6 +255,6 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800', color: theme.colors.text },
   form: { gap: theme.spacing.md },
   label: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
-  input: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: 12, fontSize: 16, color: theme.colors.text },
+  input: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: 12, fontSize: 16, color: theme.colors.text, marginBottom: 10 },
   createBtn: { marginTop: theme.spacing.lg }
 });

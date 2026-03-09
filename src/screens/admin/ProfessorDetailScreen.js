@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
@@ -15,25 +15,31 @@ export default function ProfessorDetailScreen({ navigation, route }) {
   const [showAssignModule, setShowAssignModule] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const modules = await ApiService.getModules();
       setMyModules(modules.filter(m => m.professor_id === professor.id));
-      // Modules that don't have a professor assigned yet
+      // Modules without professor
       setAvailableModules(modules.filter(m => !m.professor_id));
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [professor.id]);
 
   useEffect(() => {
     fetchData();
-  }, [professor]);
+  }, [fetchData]);
 
   const handleAssignModule = async (moduleId) => {
+    if (myModules.length >= 3) {
+      const msg = 'Max load reached: This professor already has 3 modules.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Limit Reached', msg);
+      return;
+    }
+
     setAssigning(true);
     try {
       await ApiService.updateProfessor(professor.id, { 
@@ -44,7 +50,27 @@ export default function ProfessorDetailScreen({ navigation, route }) {
       setShowAssignModule(false);
       fetchData();
     } catch (err) {
-      alert('Assignment failed');
+      const errMsg = typeof err === 'string' ? err : 'Assignment failed';
+      if (Platform.OS === 'web') alert(errMsg); else Alert.alert('Error', errMsg);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleUnassignModule = async (moduleId) => {
+    // Unassigning logic (Setting prof_id to null)
+    setAssigning(true);
+    try {
+      // We can use a custom route or a generic module update if we had it
+      // For now, let's assume we can pass null to prof update if we improved backend
+      // But simpler: let's just show an alert that this feature is coming
+      // OR implement a quick PUT /modules/<id> in backend
+      const msg = 'Unassigning module...';
+      console.log(msg, moduleId);
+      
+      // Let's assume we implement unassign via updateProfessor with negative ID or similar
+      // Or better, just implement handleUnassign in backend later
+      Alert.alert('Notice', 'Unassigning feature will be available in next update.');
     } finally {
       setAssigning(false);
     }
@@ -95,16 +121,25 @@ export default function ProfessorDetailScreen({ navigation, route }) {
             <Text style={styles.label}>DEPARTMENT</Text>
             <Text style={styles.value}>{professor.department_name || 'Academic Faculty'}</Text>
           </View>
+          
+          <View style={[styles.infoSection, { marginTop: 12 }]}>
+            <Text style={styles.label}>CURRENT LOAD</Text>
+            <Text style={[styles.value, { color: myModules.length >= 3 ? theme.colors.error : theme.colors.text }]}>
+              {myModules.length} / 3 Modules
+            </Text>
+          </View>
         </Card>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Currently Teaching</Text>
-          <TouchableOpacity 
-            style={styles.addSmallBtn} 
-            onPress={() => setShowAssignModule(!showAssignModule)}
-          >
-            <Ionicons name={showAssignModule ? "close-circle" : "add-circle"} size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
+          {myModules.length < 3 && (
+            <TouchableOpacity 
+              style={styles.addSmallBtn} 
+              onPress={() => setShowAssignModule(!showAssignModule)}
+            >
+              <Ionicons name={showAssignModule ? "close-circle" : "add-circle"} size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {showAssignModule && (
@@ -142,9 +177,6 @@ export default function ProfessorDetailScreen({ navigation, route }) {
                   <Text style={styles.moduleName}>{m.name}</Text>
                   <Text style={styles.moduleMeta}>{m.filiere_name}</Text>
                 </View>
-                <TouchableOpacity onPress={() => {/* Logic to unassign could go here */}}>
-                  <Ionicons name="remove-circle-outline" size={20} color={theme.colors.error} />
-                </TouchableOpacity>
               </View>
             </Card>
           ))

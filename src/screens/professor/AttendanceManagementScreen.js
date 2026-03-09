@@ -1,32 +1,82 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
-import { STUDENTS } from '../../data/mockData';
+import { ApiService } from '../../services/api';
 
 export default function AttendanceManagementScreen({ navigation, route }) {
-  const [attendance, setAttendance] = useState(
-    STUDENTS.reduce((acc, s) => ({ ...acc, [s.id]: 'present' }), {})
-  );
+  const { session } = route.params; // Can be a regular session or an exam object
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [attendance, setAttendance] = useState({});
+
+  const isExam = session.category === 'Exam';
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [allStudents, currentAtt] = await Promise.all([
+        ApiService.getStudents(),
+        ApiService.getAttendance(isExam ? { examId: session.id } : { sessionId: session.id })
+      ]);
+
+      const modules = await ApiService.getModules();
+      const currentModule = modules.find(m => m.id === session.module_id);
+      
+      const enrolledStudents = allStudents.filter(s => s.filiere_id === currentModule?.filiere_id);
+      setStudents(enrolledStudents);
+
+      const initialAtt = {};
+      enrolledStudents.forEach(s => {
+        const found = currentAtt.find(a => a.student_id === s.id);
+        initialAtt[s.id] = found ? found.status : 'present';
+      });
+      setAttendance(initialAtt);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [session, isExam]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const SITUATIONS = [
-    { label: 'P', value: 'present', color: theme.colors.success, full: 'Present' },
-    { label: 'L', value: 'late', color: theme.colors.warning, full: 'Late' },
-    { label: 'E', value: 'excused', color: theme.colors.info, full: 'Excused' },
-    { label: 'A', value: 'absent', color: theme.colors.error, full: 'Absent' },
+    { label: 'P', value: 'present', color: theme.colors.success },
+    { label: 'L', value: 'late', color: theme.colors.warning },
+    { label: 'E', value: 'excused', color: theme.colors.info },
+    { label: 'A', value: 'absent', color: theme.colors.error },
   ];
 
-  const setStatus = (id, status) => {
-    setAttendance(prev => ({ ...prev, [id]: status }));
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const payload = Object.entries(attendance).map(([student_id, status]) => ({
+        student_id: parseInt(student_id),
+        session_id: isExam ? null : session.id,
+        exam_id: isExam ? session.id : null,
+        status,
+        date: today
+      }));
+
+      await ApiService.submitAttendance(payload);
+      const msg = 'Attendance report submitted successfully!';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Success', msg);
+      navigation.goBack();
+    } catch (err) {
+      alert('Submission failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const renderStudent = ({ item }) => {
     const currentStatus = attendance[item.id] || 'present';
-    const activeSituation = SITUATIONS.find(s => s.value === currentStatus);
-
     return (
       <Card style={styles.studentCard}>
         <View style={styles.studentInfo}>
@@ -35,7 +85,7 @@ export default function AttendanceManagementScreen({ navigation, route }) {
           </View>
           <View style={styles.nameBlock}>
             <Text style={styles.studentName}>{item.name}</Text>
-            <Text style={styles.studentId}>ID: STU-2024-{item.id}</Text>
+            <Text style={styles.studentId}>{item.registration_number || `ID: ${item.id}`}</Text>
           </View>
         </View>
         
@@ -43,16 +93,10 @@ export default function AttendanceManagementScreen({ navigation, route }) {
           {SITUATIONS.map((sit) => (
             <TouchableOpacity 
               key={sit.value}
-              onPress={() => setStatus(item.id, sit.value)}
-              style={[
-                styles.sitBtn, 
-                currentStatus === sit.value && { backgroundColor: sit.color }
-              ]}
+              onPress={() => setAttendance(p => ({...p, [item.id]: sit.value}))}
+              style={[styles.sitBtn, currentStatus === sit.value && { backgroundColor: sit.color }]}
             >
-              <Text style={[
-                styles.sitLabel,
-                currentStatus === sit.value && styles.sitLabelActive
-              ]}>{sit.label}</Text>
+              <Text style={[styles.sitLabel, currentStatus === sit.value && styles.sitLabelActive]}>{sit.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -60,52 +104,27 @@ export default function AttendanceManagementScreen({ navigation, route }) {
     );
   };
 
-  const stats = {
-    total: STUDENTS.length,
-    present: Object.values(attendance).filter(v => v === 'present' || v === 'late').length,
-    absent: Object.values(attendance).filter(v => v === 'absent').length,
-  };
+  if (loading) return <View style={styles.center}><ActivityIndicator color={theme.colors.primary} /></View>;
 
   return (
     <View style={styles.container}>
       <ScreenHeader 
-        title="Session Attendance" 
-        subtitle="Mark student presence for Database Systems"
+        title={isExam ? "Exam Roll Call" : "Attendance"} 
+        subtitle={session.module_name}
         showBack={true}
         onBack={() => navigation.goBack()}
       />
       
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statVal}>{stats.total}</Text>
-          <Text style={styles.statLabel}>ENROLLED</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <Text style={[styles.statVal, { color: theme.colors.success }]}>{stats.present}</Text>
-          <Text style={styles.statLabel}>PRESENT</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <Text style={[styles.statVal, { color: theme.colors.error }]}>{stats.absent}</Text>
-          <Text style={styles.statLabel}>ABSENT</Text>
-        </View>
-      </View>
-
       <FlatList
-        data={STUDENTS}
+        data={students}
         renderItem={renderStudent}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={<Text style={styles.empty}>No students found for this module.</Text>}
       />
 
       <View style={styles.footer}>
-        <Button 
-          title="Submit Attendance Report" 
-          onPress={() => alert('Attendance Saved!')}
-          style={styles.submitBtn}
-        />
+        <Button title="Save Attendance" loading={saving} onPress={handleSave} style={styles.submitBtn} />
       </View>
     </View>
   );
@@ -113,56 +132,18 @@ export default function AttendanceManagementScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  statsRow: { 
-    flexDirection: 'row', 
-    backgroundColor: theme.colors.card,
-    margin: theme.spacing.lg,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.shadows.sm,
-  },
-  statBox: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 20, fontWeight: '800', color: theme.colors.text },
-  statLabel: { fontSize: 10, fontWeight: '700', color: theme.colors.textMuted, marginTop: 4 },
-  statDivider: { width: 1, height: '100%', backgroundColor: theme.colors.border },
-  list: { paddingHorizontal: theme.spacing.lg, paddingBottom: 100 },
-  studentCard: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
-    padding: theme.spacing.sm,
-  },
-  studentInfo: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, flex: 1 },
-  avatar: { width: 36, height: 36, borderRadius: 8, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, justifyContent: 'center' },
+  list: { padding: theme.spacing.lg, paddingBottom: 100 },
+  studentCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: 12 },
+  studentInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 14, fontWeight: '700', color: theme.colors.primary },
-  nameBlock: {},
   studentName: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
-  studentId: { fontSize: 11, color: theme.colors.textMuted, marginTop: 1 },
+  studentId: { fontSize: 11, color: theme.colors.textMuted },
   selectorRow: { flexDirection: 'row', gap: 6 },
-  sitBtn: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 6, 
-    backgroundColor: theme.colors.accent, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
+  sitBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border },
   sitLabel: { fontSize: 12, fontWeight: '800', color: theme.colors.textSecondary },
   sitLabelActive: { color: '#FFF' },
-  footer: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: theme.spacing.lg, 
-    backgroundColor: theme.colors.background,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  submitBtn: { ...theme.shadows.md },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: theme.spacing.lg, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: theme.colors.border },
+  empty: { textAlign: 'center', marginTop: 40, color: theme.colors.textMuted }
 });

@@ -17,7 +17,20 @@ export default function ExamManagementScreen({ navigation }) {
     setLoading(true);
     try {
       const data = await ApiService.getExams();
-      setExams(data);
+      const today = new Date().toISOString().split('T')[0];
+
+      // 1. Filter: ONLY show future or today's exams
+      // 2. Sort: DESCENDING order (Newest/Latest first)
+      const processed = data
+        .filter(e => e.date >= today)
+        .sort((a, b) => {
+          // Compare date first
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          // Then compare start_time
+          return (b.start_time || '').localeCompare(a.start_time || '');
+        });
+
+      setExams(processed);
     } catch (err) {
       console.error('Fetch exams error:', err);
     } finally {

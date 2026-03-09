@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Switch, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Switch, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -16,6 +16,7 @@ export default function ModifyRoomScreen({ navigation, route }) {
   const [status, setStatus] = useState(room.status || 'active');
   const [hasWifi, setHasWifi] = useState(room.has_wifi ?? true);
   const [hasProjector, setHasProjector] = useState(room.has_projector ?? true);
+  const [lienGps, setLienGps] = useState(room.lien_gps || '');
   
   const [saving, setSaving] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
@@ -25,7 +26,7 @@ export default function ModifyRoomScreen({ navigation, route }) {
   const handleSave = async () => {
     console.log('Save button clicked');
     if (!name || !capacity) {
-      const msg = 'Please fill in all required fields';
+      const msg = 'Please fill in required fields (Name, Capacity)';
       if (Platform.OS === 'web') alert(msg);
       else Alert.alert('Error', msg);
       return;
@@ -39,9 +40,9 @@ export default function ModifyRoomScreen({ navigation, route }) {
         type,
         status,
         has_wifi: hasWifi,
-        has_projector: hasProjector
+        has_projector: hasProjector,
+        lien_gps: lienGps
       };
-      console.log('Sending update to API:', room.id, updateData);
       
       await ApiService.updateRoom(room.id, updateData);
       
@@ -118,6 +119,17 @@ export default function ModifyRoomScreen({ navigation, route }) {
               value={capacity} 
               onChangeText={setCapacity}
               keyboardType="numeric" 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>GPS Link (Maps URL)</Text>
+            <TextInput 
+              style={styles.input} 
+              value={lienGps} 
+              onChangeText={setLienGps}
+              placeholder="https://maps.google.com/..."
+              autoCapitalize="none"
             />
           </View>
         </Card>

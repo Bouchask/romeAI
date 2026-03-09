@@ -47,12 +47,41 @@ export const ApiService = {
 
   // Sessions
   getSessions: () => api.get('/sessions').then(res => res.data),
+  addSession: (data) => api.post('/sessions', data).then(res => res.data),
+  updateSession: (id, data) => api.put(`/sessions/${id}`, data).then(res => res.data),
+  deleteSession: (id) => api.delete(`/sessions/${id}`).then(res => res.data),
+
+  // Attendance
+  getAttendance: (params) => {
+    const sId = params.sessionId;
+    const eId = params.examId;
+    let query = '';
+    if (sId && sId !== 'undefined') query = `session_id=${sId}`;
+    else if (eId && eId !== 'undefined') query = `exam_id=${eId}`;
+    
+    if (!query) return Promise.resolve([]);
+    return api.get(`/attendance?${query}`).then(res => res.data);
+  },
+  submitAttendance: (data) => api.post('/attendance', data).then(res => res.data),
+
+  // Audits (Notifications)
+  getSessionAudits: (filiereId) => api.get(`/audits/sessions?filiere_id=${filiereId}`).then(res => res.data),
+  getExamAudits: (filiereId) => api.get(`/audits/exams?filiere_id=${filiereId}`).then(res => res.data),
 
   // Modules
   getModules: () => api.get('/modules').then(res => res.data),
+  addModule: (data) => api.post('/modules', data).then(res => res.data),
   
   // Filieres
   getFilieres: () => api.get('/filieres').then(res => res.data),
+  addFiliere: (data) => api.post('/filieres', data).then(res => res.data),
+  
+  // Departments
+  getDepartments: () => api.get('/departments').then(res => res.data),
+  addDepartment: (data) => api.post('/departments', data).then(res => res.data),
+
+  // Semesters (Legacy support if needed)
+  getSemesters: () => api.get('/semesters').then(res => res.data),
   
   // Rooms
   getRooms: () => api.get('/rooms').then(res => res.data),
@@ -62,6 +91,8 @@ export const ApiService = {
   // Exams
   getExams: () => api.get('/exams').then(res => res.data),
   addExam: (data) => api.post('/exams', data).then(res => res.data),
+  updateExam: (id, data) => api.put(`/exams/${id}`, data).then(res => res.data),
+  deleteExam: (id) => api.delete(`/exams/${id}`).then(res => res.data),
 };
 
 // Global Error Interceptor for user-friendly messages

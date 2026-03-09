@@ -1,7 +1,11 @@
 from flask import Blueprint, jsonify, request
-from .models import db, Student, Professor, Filiere, Module, Room, Exam, Admin, Session
+from .models import db, Student, Professor, Filiere, Module, Room, Exam, Admin, Session, Department, Attendance, AuditSession, AuditExam
+from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
+
+def check_time_overlap(start1, end_time1, start2, end_time2):
+    return not (end_time1 <= start2 or end_time2 <= start1)
 
 # --- Departments ---
 @api_bp.route('/departments', methods=['GET'])
@@ -17,6 +21,44 @@ def add_department():
     db.session.commit()
     return jsonify(new_dep.to_dict()), 201
 
+# --- Filieres ---
+@api_bp.route('/filieres', methods=['GET'])
+def get_filieres():
+    filieres = Filiere.query.all()
+    return jsonify([f.to_dict() for f in filieres])
+
+@api_bp.route('/filieres', methods=['POST'])
+def add_filiere():
+    data = request.json
+    new_f = Filiere(name=data['name'], department_id=data['department_id'])
+    db.session.add(new_f)
+    db.session.commit()
+    return jsonify(new_f.to_dict()), 201
+
+# --- Modules ---
+@api_bp.route('/modules', methods=['GET'])
+def get_modules():
+    modules = Module.query.all()
+    return jsonify([m.to_dict() for m in modules])
+
+@api_bp.route('/modules', methods=['POST'])
+def add_module():
+    data = request.json
+    try:
+        f_id = int(data['filiere_id'])
+        if Module.query.filter_by(filiere_id=f_id).count() >= 7:
+            return jsonify({"message": "Filiere full (max 7)"}), 400
+        p_id = data.get('professor_id')
+        if p_id and Module.query.filter_by(professor_id=int(p_id)).count() >= 3:
+            return jsonify({"message": "Prof load full (max 3)"}), 400
+        new_m = Module(name=data['name'], filiere_id=f_id, professor_id=int(p_id) if p_id else None)
+        db.session.add(new_m)
+        db.session.commit()
+        return jsonify(new_m.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": str(e)}), 500
+
 # --- Sessions ---
 @api_bp.route('/sessions', methods=['GET'])
 def get_sessions():
@@ -26,105 +68,129 @@ def get_sessions():
 @api_bp.route('/sessions', methods=['POST'])
 def add_session():
     data = request.json
-    new_session = Session(
-        module_id=data['module_id'], 
-        room_id=data['room_id'],
-        type=data['type'],
-        start_time=data['start_time'],
-        end_time=data['end_time'],
-        day=data['day']
-    )
-    db.session.add(new_session)
-    db.session.commit()
-    return jsonify(new_session.to_dict()), 201
+    try:
+        mid, rid = int(data['module_id']), int(data['room_id'])
+        date_str, start, end = data['date'], data['start_time'], data['end_time']
+        
+        # Room Conflict
+        conf = Session.query.filter_by(room_id=rid, date=date_str).all()
+        for s in conf:
+            if check_time_overlap(start, end, s.start_time, s.end_time):
+                return jsonify({"message": "Room already booked"}), 400
+        
+        new_session = Session(module_id=mid, room_id=rid, type=data['type'], date=date_str, start_time=start, end_time=end, day=data['day'])
+        db.session.add(new_session)
+        db.session.commit()
+        return jsonify(new_session.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": str(e)}), 500
 
+@api_bp.route('/sessions/<int:id>', methods=['PUT'])
+def update_session(id):
+    session = Session.query.get_or_404(id)
+    data = request.json
+    if data.get('room_id') and int(data['room_id']) != session.room_id:
+        audit = AuditSession(session_id=session.id, field_changed="ROOM", old_value=str(session.room_id), new_value=str(data['room_id']))
+        db.session.add(audit)
+        session.room_id = int(data['room_id'])
+    if data.get('date') and data['date'] != session.date:
+        audit = AuditSession(session_id=session.id, field_changed="DATE", old_value=str(session.date), new_value=str(data['date']))
+        db.session.add(audit)
+        session.date = data['date']
+    session.start_time = data.get('start_time', session.start_time)
+    session.end_time = data.get('end_time', session.end_time)
+    session.is_cancelled = data.get('is_cancelled', session.is_cancelled)
+    db.session.commit()
+    return jsonify(session.to_dict())
+
+@api_bp.route('/sessions/<int:id>', methods=['DELETE'])
+def delete_session(id):
+    session = Session.query.get_or_404(id)
+    db.session.delete(session)
+    db.session.commit()
+    return '', 204
+
+# --- Audits (Notifications) ---
+@api_bp.route('/audits/sessions', methods=['GET'])
+def get_session_audits():
+    # Filter for a specific filiere if passed
+    fid = request.args.get('filiere_id')
+    query = AuditSession.query.join(Session).join(Module)
+    if fid:
+        query = query.filter(Module.filiere_id == int(fid))
+    audits = query.order_by(AuditSession.modification_time.desc()).all()
+    return jsonify([a.to_dict() for a in audits])
+
+@api_bp.route('/audits/exams', methods=['GET'])
+def get_exam_audits():
+    fid = request.args.get('filiere_id')
+    query = AuditExam.query.join(Exam).join(Module)
+    if fid:
+        query = query.filter(Module.filiere_id == int(fid))
+    audits = query.order_by(AuditExam.modification_time.desc()).all()
+    return jsonify([a.to_dict() for a in audits])
+
+# --- Attendance ---
+@api_bp.route('/attendance', methods=['POST'])
+def submit_attendance():
+    data = request.json
+    if not isinstance(data, list): data = [data]
+    for item in data:
+        filters = {'student_id': int(item['student_id']), 'date': item['date']}
+        if item.get('session_id'): filters['session_id'] = int(item['session_id'])
+        if item.get('exam_id'): filters['exam_id'] = int(item['exam_id'])
+        existing = Attendance.query.filter_by(**filters).first()
+        if existing: existing.status = item['status']
+        else:
+            db.session.add(Attendance(
+                student_id=int(item['student_id']),
+                session_id=int(item.get('session_id')) if item.get('session_id') else None,
+                exam_id=int(item.get('exam_id')) if item.get('exam_id') else None,
+                status=item['status'], date=item['date']
+            ))
+    db.session.commit()
+    return jsonify({"message": "Success"}), 201
+
+@api_bp.route('/attendance', methods=['GET'])
+def get_attendance():
+    sid = request.args.get('session_id')
+    eid = request.args.get('exam_id')
+    
+    try:
+        if sid and sid != 'undefined':
+            atts = Attendance.query.filter_by(session_id=int(sid)).all()
+        elif eid and eid != 'undefined':
+            atts = Attendance.query.filter_by(exam_id=int(eid)).all()
+        else:
+            atts = Attendance.query.all()
+        return jsonify([a.to_dict() for a in atts])
+    except (ValueError, TypeError):
+        return jsonify([]), 200 # Return empty instead of crashing
+
+# --- Auth & Users ---
 @api_bp.route('/login', methods=['POST'])
 def login():
     data = request.json
-    email = data.get('email', '').lower()
-    role_requested = data.get('role', '').lower()
-
-    # 1. Check the requested role first
     user = None
-    if role_requested == 'student':
-        user = Student.query.filter_by(email=email).first()
-    elif role_requested == 'professor':
-        user = Professor.query.filter_by(email=email).first()
-    elif role_requested == 'admin':
-        user = Admin.query.filter_by(email=email).first()
+    role = data.get('role', '').lower()
+    if role == 'student': user = Student.query.filter_by(email=data['email'].lower()).first()
+    elif role == 'professor': user = Professor.query.filter_by(email=email).first()
+    elif role == 'admin': user = Admin.query.filter_by(email=data['email'].lower()).first()
+    if user: return jsonify(user.to_dict())
+    return jsonify({"message": "Not found"}), 404
 
-    if user:
-        return jsonify(user.to_dict())
-    
-    # 2. If not found, check other tables to help the user
-    roles_to_check = ['student', 'professor', 'admin']
-    roles_to_check.remove(role_requested)
-    
-    for r in roles_to_check:
-        found_other = None
-        if r == 'student': found_other = Student.query.filter_by(email=email).first()
-        elif r == 'professor': found_other = Professor.query.filter_by(email=email).first()
-        elif r == 'admin': found_other = Admin.query.filter_by(email=email).first()
-        
-        if found_other:
-            return jsonify({
-                "message": f"This email is registered as a {r.capitalize()}. Please select the correct role above."
-            }), 400
-
-    return jsonify({"message": "Account not found. Please register first."}), 404
-
-# --- Admins ---
-@api_bp.route('/admins', methods=['GET'])
-def get_admins():
-    admins = Admin.query.all()
-    return jsonify([a.to_dict() for a in admins])
-
-@api_bp.route('/admins', methods=['POST'])
-def add_admin():
-    data = request.json
-    email = data.get('email', '').lower()
-    
-    # Check if email exists in ANY table
-    if Student.query.filter_by(email=email).first() or \
-       Professor.query.filter_by(email=email).first() or \
-       Admin.query.filter_by(email=email).first():
-        return jsonify({"message": "This email is already registered."}), 400
-
-    new_admin = Admin(name=data['name'], email=email)
-    db.session.add(new_admin)
-    db.session.commit()
-    return jsonify(new_admin.to_dict()), 201
-
-# --- Students ---
 @api_bp.route('/students', methods=['GET'])
 def get_students():
-    students = Student.query.all()
-    return jsonify([s.to_dict() for s in students])
+    return jsonify([s.to_dict() for s in Student.query.all()])
 
 @api_bp.route('/students', methods=['POST'])
 def add_student():
     data = request.json
-    email = data.get('email', '').lower()
-
-    if Student.query.filter_by(email=email).first() or \
-       Professor.query.filter_by(email=email).first() or \
-       Admin.query.filter_by(email=email).first():
-        return jsonify({"message": "This email is already registered."}), 400
-
-    new_student = Student(name=data['name'], email=email, filiere_id=data.get('filiere_id'))
-    db.session.add(new_student)
+    new_s = Student(name=data['name'], email=data['email'].lower(), filiere_id=data.get('filiere_id'))
+    db.session.add(new_s)
     db.session.commit()
-    return jsonify(new_student.to_dict()), 201
-
-@api_bp.route('/students/<int:id>', methods=['PUT'])
-def update_student(id):
-    student = Student.query.get_or_404(id)
-    data = request.json
-    student.name = data.get('name', student.name)
-    student.email = data.get('email', student.email)
-    student.filiere_id = data.get('filiere_id', student.filiere_id)
-    db.session.commit()
-    return jsonify(student.to_dict())
+    return jsonify(new_s.to_dict()), 201
 
 @api_bp.route('/students/<int:id>', methods=['DELETE'])
 def delete_student(id):
@@ -133,74 +199,34 @@ def delete_student(id):
     db.session.commit()
     return '', 204
 
-# --- Modules ---
-@api_bp.route('/modules', methods=['GET'])
-def get_modules():
-    modules = Module.query.all()
-    return jsonify([m.to_dict() for m in modules])
-
-# --- Professors ---
 @api_bp.route('/professors', methods=['GET'])
 def get_professors():
-    profs = Professor.query.all()
-    return jsonify([p.to_dict() for p in profs])
+    return jsonify([p.to_dict() for p in Professor.query.all()])
 
 @api_bp.route('/professors', methods=['POST'])
 def add_professor():
     data = request.json
-    email = data.get('email', '').lower()
-
-    if Student.query.filter_by(email=email).first() or \
-       Professor.query.filter_by(email=email).first() or \
-       Admin.query.filter_by(email=email).first():
-        return jsonify({"message": "This email is already registered."}), 400
-
-    new_prof = Professor(
-        name=data['name'], 
-        email=email,
-        department_id=data.get('department_id')
-    )
-    db.session.add(new_prof)
-    db.session.flush() # Get prof ID
-
-    # If a module was selected, link it
-    module_id = data.get('module_id')
-    if module_id:
-        mod = Module.query.get(module_id)
-        if mod:
-            mod.professor_id = new_prof.id
-
+    new_p = Professor(name=data['name'], email=data['email'].lower(), department_id=data.get('department_id'))
+    db.session.add(new_p)
+    db.session.flush()
+    if data.get('module_id'):
+        mod = Module.query.get(data['module_id'])
+        if mod: mod.professor_id = new_p.id
     db.session.commit()
-    return jsonify(new_prof.to_dict()), 201
+    return jsonify(new_p.to_dict()), 201
 
 @api_bp.route('/professors/<int:id>', methods=['PUT'])
 def update_professor(id):
     prof = Professor.query.get_or_404(id)
     data = request.json
     prof.name = data.get('name', prof.name)
-    prof.email = data.get('email', prof.email)
     prof.department_id = data.get('department_id', prof.department_id)
-    
-    # Update module link if provided
-    module_id = data.get('module_id')
-    if module_id:
-        # Clear old links if any (simple logic: one module per prof for this demo)
-        old_mods = Module.query.filter_by(professor_id=prof.id).all()
-        for m in old_mods: m.professor_id = None
-        
-        new_mod = Module.query.get(module_id)
-        if new_mod: new_mod.professor_id = prof.id
-
     db.session.commit()
     return jsonify(prof.to_dict())
 
 @api_bp.route('/professors/<int:id>', methods=['DELETE'])
 def delete_professor(id):
     prof = Professor.query.get_or_404(id)
-    # Clear module associations before deleting
-    mods = Module.query.filter_by(professor_id=prof.id).all()
-    for m in mods: m.professor_id = None
-    
     db.session.delete(prof)
     db.session.commit()
     return '', 204
@@ -208,69 +234,48 @@ def delete_professor(id):
 # --- Rooms ---
 @api_bp.route('/rooms', methods=['GET'])
 def get_rooms():
-    rooms = Room.query.all()
-    return jsonify([r.to_dict() for r in rooms])
+    return jsonify([r.to_dict() for r in Room.query.all()])
 
 @api_bp.route('/rooms', methods=['POST'])
 def add_room():
     data = request.json
-    new_room = Room(name=data['name'], capacity=data['capacity'])
-    db.session.add(new_room)
+    new_r = Room(name=data['name'], capacity=data['capacity'], lien_gps=data.get('lien_gps'))
+    db.session.add(new_r)
     db.session.commit()
-    return jsonify(new_room.to_dict()), 201
+    return jsonify(new_r.to_dict()), 201
 
 @api_bp.route('/rooms/<int:id>', methods=['PUT'])
 def update_room(id):
     room = Room.query.get_or_404(id)
     data = request.json
-    room.name = data.get('name', room.name)
-    room.capacity = data.get('capacity', room.capacity)
-    room.type = data.get('type', room.type)
-    room.status = data.get('status', room.status)
-    room.has_wifi = data.get('has_wifi', room.has_wifi)
-    room.has_projector = data.get('has_projector', room.has_projector)
+    room.name, room.capacity = data.get('name', room.name), data.get('capacity', room.capacity)
+    room.status, room.lien_gps = data.get('status', room.status), data.get('lien_gps', room.lien_gps)
     db.session.commit()
     return jsonify(room.to_dict())
 
 # --- Exams ---
 @api_bp.route('/exams', methods=['GET'])
 def get_exams():
-    exams = Exam.query.all()
-    return jsonify([e.to_dict() for e in exams])
+    return jsonify([e.to_dict() for e in Exam.query.all()])
 
 @api_bp.route('/exams', methods=['POST'])
 def add_exam():
     data = request.json
-    print(f"DEBUG: Incoming Exam Data: {data}")
-    
-    try:
-        # Get required IDs and ensure they are integers
-        mid = data.get('module_id')
-        rid = data.get('room_id')
-        
-        if not mid or not rid:
-            return jsonify({"message": "Module ID and Room ID are required"}), 400
+    new_e = Exam(module_id=int(data['module_id']), room_id=int(data['room_id']), date=data['date'], start_time=data['start_time'], end_time=data['end_time'], type=data.get('type', 'Normal'))
+    db.session.add(new_e)
+    db.session.commit()
+    return jsonify(new_e.to_dict()), 201
 
-        new_exam = Exam(
-            module_id=int(mid), 
-            room_id=int(rid), 
-            date=data.get('date', '2024-01-01'),
-            start_time=data.get('start_time', '09:00'),
-            end_time=data.get('end_time', '11:00'),
-            type=data.get('type', 'Normal'),
-            status=data.get('status', 'Published')
-        )
-        db.session.add(new_exam)
-        db.session.commit()
-        print(f"DEBUG: Created Exam ID: {new_exam.id}")
-        return jsonify(new_exam.to_dict()), 201
-    except Exception as e:
-        print(f"DEBUG: Exception in add_exam: {str(e)}")
-        db.session.rollback()
-        return jsonify({"message": f"Server Error: {str(e)}"}), 500
-
-# --- Filieres ---
-@api_bp.route('/filieres', methods=['GET'])
-def get_filieres():
-    filieres = Filiere.query.all()
-    return jsonify([f.to_dict() for f in filieres])
+@api_bp.route('/exams/<int:id>', methods=['PUT'])
+def update_exam(id):
+    exam = Exam.query.get_or_404(id)
+    data = request.json
+    if data.get('room_id') and int(data['room_id']) != exam.room_id:
+        db.session.add(AuditExam(exam_id=exam.id, field_changed="ROOM", old_value=str(exam.room_id), new_value=str(data['room_id'])))
+        exam.room_id = int(data['room_id'])
+    if data.get('date') and data['date'] != exam.date:
+        db.session.add(AuditExam(exam_id=exam.id, field_changed="DATE", old_value=str(exam.date), new_value=str(data['date'])))
+        exam.date = data['date']
+    exam.start_time, exam.end_time = data.get('start_time', exam.start_time), data.get('end_time', exam.end_time)
+    db.session.commit()
+    return jsonify(exam.to_dict())
