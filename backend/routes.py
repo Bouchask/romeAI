@@ -189,9 +189,17 @@ def add_room():
 
 @api_bp.route('/rooms/<int:id>', methods=['PUT'])
 def update_room(id):
-    r = Room.query.get_or_404(id); data = request.json
-    r.name, r.capacity, r.status, r.lien_gps = data.get('name', r.name), data.get('capacity', r.capacity), data.get('status', r.status), data.get('lien_gps', r.lien_gps)
-    db.session.commit(); return jsonify(r.to_dict())
+    r = Room.query.get_or_404(id)
+    data = request.json
+    r.name = data.get('name', r.name)
+    r.capacity = data.get('capacity', r.capacity)
+    r.type = data.get('type', r.type)
+    r.status = data.get('status', r.status)
+    r.lien_gps = data.get('lien_gps', r.lien_gps)
+    r.has_wifi = data.get('has_wifi', r.has_wifi)
+    r.has_projector = data.get('has_projector', r.has_projector)
+    db.session.commit()
+    return jsonify(r.to_dict())
 
 # --- Exams ---
 @api_bp.route('/exams', methods=['GET'])

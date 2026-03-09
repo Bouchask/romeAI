@@ -19,7 +19,7 @@ export default function UserManagementScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Yahya2004@'); // Default password
+  const [password, setPassword] = useState(''); // Empty by default now
   const [selectedFiliereId, setSelectedFiliereId] = useState(null);
   const [selectedDeptId, setSelectedDeptId] = useState(null);
   const [selectedModuleId, setSelectedModuleId] = useState(null);
@@ -56,19 +56,24 @@ export default function UserManagementScreen({ navigation }) {
 
     setSubmitting(true);
     try {
+      // If password is empty, let backend handle the default Yahya2004@
+      const userPayload = { 
+        name, 
+        email, 
+        password: password.trim() || undefined 
+      };
+
       if (activeTab === 'students') {
-        await ApiService.addStudent({ name, email, password, filiere_id: selectedFiliereId });
+        await ApiService.addStudent({ ...userPayload, filiere_id: selectedFiliereId });
       } else {
         await ApiService.addProfessor({ 
-          name, 
-          email, 
-          password,
+          ...userPayload,
           department_id: selectedDeptId, 
           module_id: selectedModuleId 
         });
       }
       setModalVisible(false);
-      setName(''); setEmail(''); setPassword('Yahya2004@');
+      setName(''); setEmail(''); setPassword('');
       fetchData();
     } catch (err) {
       alert('Creation failed');
@@ -143,15 +148,20 @@ export default function UserManagementScreen({ navigation }) {
             <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Enter name" />
             
             <Text style={styles.label}>Email Address</Text>
-            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@test.com" autoCapitalize="none" />
+            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@university.edu" autoCapitalize="none" />
 
             <Text style={styles.label}>Login Password</Text>
-            <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Yahya2004@" secureTextEntry />
-            <Text style={styles.hint}>Default: Yahya2004@</Text>
+            <TextInput 
+              style={styles.input} 
+              value={password} 
+              onChangeText={setPassword} 
+              placeholder="Assign a password" 
+              secureTextEntry 
+            />
 
             {activeTab === 'students' ? (
               <>
-                <Text style={styles.label}>Filiere (Optional)</Text>
+                <Text style={styles.label}>Program (Filiere)</Text>
                 {filieres.map(f => (
                   <TouchableOpacity key={f.id} style={[styles.option, selectedFiliereId === f.id && styles.activeOption]} onPress={() => setSelectedFiliereId(f.id)}>
                     <Text style={[styles.optionText, selectedFiliereId === f.id && styles.activeOptionText]}>{f.name}</Text>
@@ -175,7 +185,7 @@ export default function UserManagementScreen({ navigation }) {
               </>
             )}
 
-            <Button title="Create Account" loading={submitting} onPress={handleCreateUser} style={{ marginTop: 20 }} />
+            <Button title="Register Member" loading={submitting} onPress={handleCreateUser} style={{ marginTop: 20 }} />
             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </ScrollView>
         </View>
@@ -210,6 +220,5 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 13, color: theme.colors.textSecondary },
   activeOptionText: { color: theme.colors.primary, fontWeight: '700' },
   cancelBtn: { alignItems: 'center', marginTop: 15 },
-  cancelText: { color: theme.colors.textMuted, fontWeight: '600' },
-  hint: { fontSize: 10, color: theme.colors.textMuted, fontStyle: 'italic' }
+  cancelText: { color: theme.colors.textMuted, fontWeight: '600' }
 });

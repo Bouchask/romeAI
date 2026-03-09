@@ -30,16 +30,31 @@ export default function StudentDashboardScreen({ navigation }) {
 
       // Get today's date YYYY-MM-DD
       const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
       const todayName = now.toLocaleDateString('en-US', { weekday: 'long' });
       
+      console.log('--- STUDENT DASHBOARD DEBUG ---');
+      console.log('User Filiere ID:', user.filiere_id);
+      console.log('Target Date:', todayStr, todayName);
+      console.log('Total Raw Sessions:', sessions.length);
+
       const todayFiltered = sessions.filter(s => {
-        const matchesFiliere = s.module_obj?.filiere_id === user.filiere_id;
+        // Direct comparison using the new filiere_id field from backend
+        const matchesFiliere = s.filiere_id === user.filiere_id;
         const matchesDate = s.date === todayStr;
         const matchesDayFallback = !s.date && s.day === todayName;
-        return matchesFiliere && (matchesDate || matchesDayFallback);
+        
+        const ok = matchesFiliere && (matchesDate || matchesDayFallback);
+        if (matchesFiliere) {
+           console.log(`Checking session ${s.id}: matchesDate=${matchesDate} (${s.date}), matchesDay=${matchesDayFallback} (${s.day}) -> Result: ${ok}`);
+        }
+        return ok;
       });
       
+      console.log('Filtered Today Sessions Count:', todayFiltered.length);
       setTodayClasses(todayFiltered);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);

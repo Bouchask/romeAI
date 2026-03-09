@@ -20,20 +20,27 @@ export default function StudentScheduleScreen({ navigation }) {
         ApiService.getExams()
       ]);
 
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
 
-      // Filter: Only for student's filiere AND only future/today
+      // 1. Process Sessions: Only for student's filiere AND Date >= Today
       const sessFilt = sessions
-        .filter(s => s.module_obj?.filiere_id === user.filiere_id && (s.date >= today || !s.date))
+        .filter(s => s.filiere_id === user.filiere_id && (s.date >= todayStr || !s.date))
         .map(s => ({ ...s, isExam: false }));
 
+      // 2. Process Exams: Date >= Today
+      // Note: Backend might not return filiere_id for exams directly, we check module_id presence
       const examFilt = exams
-        .filter(e => e.module_id && e.date >= today) // Assuming module_id presence check
+        .filter(e => e.date >= todayStr)
         .map(e => ({ ...e, isExam: true, type: `Exam (${e.type})` }));
 
+      // 3. Combine and Sort by Date
       const combined = [...sessFilt, ...examFilt].sort((a, b) => {
-        const dA = a.date || '2024-01-01';
-        const dB = b.date || '2024-01-01';
+        const dA = a.date || '2099-12-31';
+        const dB = b.date || '2099-12-31';
         return dA.localeCompare(dB);
       });
 
@@ -54,7 +61,7 @@ export default function StudentScheduleScreen({ navigation }) {
     >
       <View style={styles.row}>
         <View style={styles.timeBlock}>
-          <Text style={styles.dayText}>{item.day || 'Scheduled'}</Text>
+          <Text style={styles.dayText}>{item.day || 'Date'}</Text>
           <Text style={styles.dateText}>{item.date}</Text>
         </View>
         <View style={styles.divider} />
@@ -75,7 +82,7 @@ export default function StudentScheduleScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="My Schedule" subtitle="Your upcoming program activities" />
+      <ScreenHeader title="My Curriculum" subtitle="Upcoming sessions and exams" />
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></View>
       ) : (
@@ -84,11 +91,11 @@ export default function StudentScheduleScreen({ navigation }) {
           renderItem={renderItem}
           keyExtractor={(item, index) => `${item.isExam ? 'e' : 's'}-${item.id}-${index}`}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="calendar-outline" size={48} color={theme.colors.border} />
-              <Text style={styles.emptyText}>No upcoming sessions or exams found.</Text>
+              <Text style={styles.emptyText}>No upcoming activities found.</Text>
             </View>
           }
         />
@@ -111,9 +118,9 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   moduleName: { fontSize: 15, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  typeBadge: { backgroundColor: theme.colors.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  typeBadge: { backgroundColor: theme.colors.primaryLight + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   typeText: { fontSize: 10, fontWeight: '800', color: theme.colors.primary },
-  examBadge: { backgroundColor: theme.colors.error + '15' },
+  examBadge: { backgroundColor: theme.colors.error + '10' },
   examTypeText: { color: theme.colors.error },
   roomText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
   timeText: { fontSize: 12, color: theme.colors.textMuted },

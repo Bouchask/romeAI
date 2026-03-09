@@ -137,9 +137,12 @@ class Session(db.Model):
 
     def to_dict(self):
         return {
-            "id": self.id, "module_id": self.module_id,
+            "id": self.id,
+            "module_id": self.module_id,
             "module_name": self.module_obj.name if self.module_obj else "Unknown",
+            "filiere_id": self.module_obj.filiere_id if self.module_obj else None,
             "professor_id": self.module_obj.professor_id if self.module_obj else None,
+
             "professor_name": self.module_obj.professor_obj.name if self.module_obj and self.module_obj.professor_obj else "Unknown",
             "room_id": self.room_id, "room_name": self.room_obj.name if self.room_obj else "Unknown",
             "room_gps": self.room_obj.lien_gps if self.room_obj else None,
