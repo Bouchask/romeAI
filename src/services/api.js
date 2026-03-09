@@ -27,7 +27,7 @@ const api = axios.create({
 
 export const ApiService = {
   // Auth
-  login: (email, role) => api.post('/login', { email, role }).then(res => res.data),
+  login: (email, role, password) => api.post('/login', { email, role, password }).then(res => res.data),
 
   // Students
   getStudents: () => api.get('/students').then(res => res.data),

@@ -30,8 +30,13 @@ def create_app():
 
         add_column_if_missing('students', 'role', "VARCHAR(20) DEFAULT 'student'")
         add_column_if_missing('students', 'registration_number', "VARCHAR(50)")
+        add_column_if_missing('students', 'password', "VARCHAR(100) DEFAULT 'Yahya2004@'")
+        
         add_column_if_missing('professors', 'role', "VARCHAR(20) DEFAULT 'professor'")
         add_column_if_missing('professors', 'department_id', "INTEGER")
+        add_column_if_missing('professors', 'password', "VARCHAR(100) DEFAULT 'Yahya2004@'")
+
+        add_column_if_missing('admins', 'password', "VARCHAR(100) DEFAULT 'Yahya2004@'")
         add_column_if_missing('rooms', 'type', "VARCHAR(50) DEFAULT 'Classroom'")
         add_column_if_missing('rooms', 'status', "VARCHAR(20) DEFAULT 'active'")
         add_column_if_missing('rooms', 'has_wifi', "BOOLEAN DEFAULT 1")

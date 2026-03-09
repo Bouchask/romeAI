@@ -1,58 +1,68 @@
-import React, { createContext, useContext, useState } from 'react';
-import { Alert } from 'react-native';
-import { ROLES } from '../constants/roles';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { ApiService } from '../services/api';
 
-const AuthContext = createContext(null);
+// Fallback for AsyncStorage if not installed (works on Web)
+const storage = {
+  getItem: async (key) => {
+    if (Platform.OS === 'web') return localStorage.getItem(key);
+    // If you need mobile, you MUST eventually install @react-native-async-storage/async-storage
+    // For now, let's use a dummy to prevent bundling crash
+    return null; 
+  },
+  setItem: async (key, value) => {
+    if (Platform.OS === 'web') localStorage.setItem(key, value);
+  },
+  removeItem: async (key) => {
+    if (Platform.OS === 'web') localStorage.removeItem(key);
+  }
+};
 
-export function AuthProvider({ children }) {
+const AuthContext = createContext({});
+
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStorageData();
+  }, []);
+
+  async function loadStorageData() {
+    try {
+      const authDataSerialized = await storage.getItem('@CampusManager:user');
+      if (authDataSerialized) {
+        setUser(JSON.parse(authDataSerialized));
+      }
+    } catch (error) {
+      console.error('Error loading auth data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const login = async (email, password, role) => {
     try {
-      // Role is validated on backend by choosing the table
-      const userData = await ApiService.login(email.toLowerCase(), role.toLowerCase());
-      
+      const userData = await ApiService.login(email, role, password);
       setUser(userData);
+      await storage.setItem('@CampusManager:user', JSON.stringify(userData));
       return true;
     } catch (error) {
-      // Display the specific error message from backend if available
-      const message = error.response?.data?.message || error;
-      Alert.alert('Login Error', typeof message === 'string' ? message : 'Check your email or account type');
+      console.error('Login failed:', error);
       return false;
     }
   };
 
-  const register = async (email, password, name, role, extra = {}) => {
-    try {
-      let newUser;
-      if (role === ROLES.STUDENT) {
-        newUser = await ApiService.addStudent({ name, email, ...extra });
-      } else if (role === ROLES.PROFESSOR) {
-        newUser = await ApiService.addProfessor({ name, email });
-      } else if (role === ROLES.ADMIN) {
-        newUser = await ApiService.addAdmin({ name, email });
-      }
-
-      setUser({ ...newUser, role });
-      return true;
-    } catch (error) {
-      Alert.alert('Registration Error', typeof error === 'string' ? error : 'Failed to register');
-      return false;
-    }
+  const logout = async () => {
+    setUser(null);
+    await storage.removeItem('@CampusManager:user');
   };
-
-  const logout = () => setUser(null);
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-}
+export const useAuth = () => useContext(AuthContext);
