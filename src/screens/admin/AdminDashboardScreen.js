@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Dimensions, ActivityIndicator, RefreshControl, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -7,8 +7,6 @@ import { StatCard } from '../../components/StatCard';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { ApiService } from '../../services/api';
-
-const { width: windowWidth } = Dimensions.get('window');
 
 export default function AdminDashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
@@ -36,16 +34,16 @@ export default function AdminDashboardScreen({ navigation }) {
       ]);
 
       setStats({
-        students: students.length,
-        professors: professors.length,
-        rooms: rooms.length,
-        modules: modules.length
+        students: (students || []).length,
+        professors: (professors || []).length,
+        rooms: (rooms || []).length,
+        modules: (modules || []).length
       });
       
-      setFilieres(filiereData);
-      setDepartments(depData);
+      setFilieres(Array.isArray(filiereData) ? filiereData : []);
+      setDepartments(Array.isArray(depData) ? depData : []);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -146,7 +144,7 @@ export default function AdminDashboardScreen({ navigation }) {
             <Text style={styles.modalTitle}>New Filiere</Text>
             <TextInput style={styles.input} value={newName} onChangeText={setNewName} placeholder="e.g. History" />
             <Text style={styles.miniLabel}>Select Parent Department</Text>
-            <ScrollView horizontal style={styles.depPicker}>
+            <ScrollView horizontal style={styles.depPicker} showsHorizontalScrollIndicator={false}>
               {departments.map(d => (
                 <TouchableOpacity 
                   key={d.id} 
@@ -182,13 +180,13 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, gap: 16 },
   modalTitle: { fontSize: 18, fontWeight: '800' },
-  input: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: 12 },
+  input: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
   closeBtn: { alignItems: 'center', marginTop: 8 },
   depPicker: { flexDirection: 'row', paddingVertical: 10 },
-  depChip: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.colors.accent, borderRadius: 20, marginRight: 8 },
-  activeChip: { backgroundColor: theme.colors.primary },
+  depChip: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.colors.accent, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: theme.colors.border },
+  activeChip: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   miniLabel: { fontSize: 11, fontWeight: '700', color: theme.colors.textMuted },
-  chipText: { fontSize: 12 },
+  chipText: { fontSize: 12, fontWeight: '600' },
   activeChipText: { color: '#FFF' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });

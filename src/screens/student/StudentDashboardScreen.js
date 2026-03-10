@@ -24,60 +24,35 @@ export default function StudentDashboardScreen({ navigation }) {
         ApiService.getSessions()
       ]);
 
-      // Filter modules by student's filiere
-      const filteredModules = modules.filter(m => m.filiere_id === user.filiere_id);
+      const filteredModules = Array.isArray(modules) ? modules.filter(m => m.filiere_id === user.filiere_id) : [];
       setMyModules(filteredModules);
 
-      // Get today's date YYYY-MM-DD
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const todayName = now.toLocaleDateString('en-US', { weekday: 'long' });
       
-      console.log('--- STUDENT DASHBOARD DEBUG ---');
-      console.log('User Filiere ID:', user.filiere_id);
-      console.log('Target Date:', todayStr, todayName);
-      console.log('Total Raw Sessions:', sessions.length);
-
-      const todayFiltered = sessions.filter(s => {
-        // Direct comparison using the new filiere_id field from backend
+      const todayFiltered = Array.isArray(sessions) ? sessions.filter(s => {
         const matchesFiliere = s.filiere_id === user.filiere_id;
         const matchesDate = s.date === todayStr;
         const matchesDayFallback = !s.date && s.day === todayName;
-        
-        const ok = matchesFiliere && (matchesDate || matchesDayFallback);
-        if (matchesFiliere) {
-           console.log(`Checking session ${s.id}: matchesDate=${matchesDate} (${s.date}), matchesDay=${matchesDayFallback} (${s.day}) -> Result: ${ok}`);
-        }
-        return ok;
-      });
+        return matchesFiliere && (matchesDate || matchesDayFallback);
+      }) : [];
       
-      console.log('Filtered Today Sessions Count:', todayFiltered.length);
       setTodayClasses(todayFiltered);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
+      console.error(err);
+      setMyModules([]);
+      setTodayClasses([]);
     } finally {
       setLoading(false);
     }
   }, [user.filiere_id]);
 
-  useEffect(() => {
-    if (isFocused) fetchData();
-  }, [isFocused, fetchData]);
+  useEffect(() => { if (isFocused) fetchData(); }, [isFocused, fetchData]);
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}
-    >
-      <ScreenHeader 
-        title={`Hi, ${user?.name?.split(' ')[0]}!`} 
-        subtitle={`Program: ${user?.filiere_name || 'Assigned'}`}
-      />
-      
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
+      <ScreenHeader title={`Hi, ${user?.name?.split(' ')[0]}!`} subtitle={`Program: ${user?.filiere_name || 'Assigned'}`} />
       <View style={styles.content}>
         <View style={styles.statsRow}>
           <StatCard title="Today's Classes" value={todayClasses.length.toString()} icon="calendar" color={theme.colors.primary} />
@@ -85,17 +60,11 @@ export default function StudentDashboardScreen({ navigation }) {
         </View>
 
         <Text style={styles.sectionTitle}>Today's Schedule</Text>
-        {todayClasses.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No classes scheduled for today.</Text>
-          </Card>
+        {!Array.isArray(todayClasses) || todayClasses.length === 0 ? (
+          <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for today.</Text></Card>
         ) : (
           todayClasses.map((c) => (
-            <Card 
-              key={c.id} 
-              style={styles.scheduleCard}
-              onPress={() => navigation.navigate('SessionDetail', { session: c })}
-            >
+            <Card key={c.id} style={styles.scheduleCard} onPress={() => navigation.navigate('SessionDetail', { session: c })}>
               <View style={styles.cardHeader}>
                 <View style={styles.moduleInfo}>
                   <Text style={styles.moduleTitle}>{c.module_name}</Text>
@@ -104,14 +73,8 @@ export default function StudentDashboardScreen({ navigation }) {
                 <View style={styles.typeBadge}><Text style={styles.typeText}>{c.type}</Text></View>
               </View>
               <View style={styles.cardFooter}>
-                <View style={styles.infoItem}>
-                  <Ionicons name="location-outline" size={14} color={theme.colors.primary} />
-                  <Text style={styles.infoText}>{c.room_name}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Ionicons name="time-outline" size={14} color={theme.colors.primary} />
-                  <Text style={styles.infoText}>{c.start_time} - {c.end_time}</Text>
-                </View>
+                <View style={styles.infoItem}><Ionicons name="location-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.room_name}</Text></View>
+                <View style={styles.infoItem}><Ionicons name="time-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.start_time} - {c.end_time}</Text></View>
               </View>
             </Card>
           ))
@@ -119,15 +82,11 @@ export default function StudentDashboardScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>My Learning Path</Text>
         <Card noPadding>
-          {myModules.length === 0 ? (
+          {!Array.isArray(myModules) || myModules.length === 0 ? (
             <View style={styles.emptyPadding}><Text style={styles.emptyText}>No modules assigned yet.</Text></View>
           ) : (
             myModules.map((m, i, arr) => (
-              <TouchableOpacity 
-                key={m.id} 
-                style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]}
-                onPress={() => navigation.navigate('ModuleHistory', { module: m })}
-              >
+              <TouchableOpacity key={m.id} style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]} onPress={() => navigation.navigate('ModuleHistory', { module: m })}>
                 <View style={styles.moduleIcon}><Ionicons name="journal" size={20} color={theme.colors.primary} /></View>
                 <Text style={styles.moduleName}>{m.name}</Text>
                 <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />

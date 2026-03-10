@@ -45,15 +45,13 @@ export default function ProfessorDashboardScreen({ navigation }) {
         ApiService.getDepartments()
       ]);
 
-      const myModules = modules.filter(m => m.professor_id === user.id);
+      const myModules = Array.isArray(modules) ? modules.filter(m => m.professor_id === user.id) : [];
       
-      // LOGIC FIX: Map unique departments directly from the module's department_id
       const myDepIds = [...new Set(myModules.map(m => m.department_id).filter(id => id !== null))];
-      const filteredDeps = departments.filter(d => myDepIds.includes(d.id));
+      const filteredDeps = Array.isArray(departments) ? departments.filter(d => myDepIds.includes(d.id)) : [];
       setMyDepartments(filteredDeps);
 
-      // Sessions for this prof
-      const profSessions = sessions.filter(s => s.professor_id === user.id);
+      const profSessions = Array.isArray(sessions) ? sessions.filter(s => s.professor_id === user.id) : [];
       setAllSessions(profSessions);
 
       const todayStr = navigatorDays[0].date;
@@ -63,6 +61,8 @@ export default function ProfessorDashboardScreen({ navigation }) {
       });
     } catch (err) {
       console.error(err);
+      setAllSessions([]);
+      setMyDepartments([]);
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function ProfessorDashboardScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
-      <ScreenHeader title={`Welcome, ${user?.name?.split(' ')[0]}`} subtitle="Departmental Oversight" />
+      <ScreenHeader title={`Welcome, Prof. ${user?.name?.split(' ')[0]}`} subtitle="Departmental Oversight" />
       <View style={styles.content}>
         <View style={styles.statsRow}>
           <StatCard title="Today's Load" value={stats.today.toString()} icon="time" color={theme.colors.primary} />

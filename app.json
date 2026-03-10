@@ -6,9 +6,17 @@
     "orientation": "portrait",
     "icon": "./src/data/fpk.png",
     "userInterfaceStyle": "light",
+
     "splash": {
+      "image": "./src/data/fpk.png",
+      "resizeMode": "contain",
       "backgroundColor": "#2563EB"
     },
+
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.campusroommanager.app",
@@ -16,13 +24,17 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
       "package": "com.campusroommanager.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./src/data/fpk.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": []
     },
+
     "extra": {
       "eas": {
         "projectId": "361f1d6d-ddbe-4447-8194-34ae9e3d4c23"
