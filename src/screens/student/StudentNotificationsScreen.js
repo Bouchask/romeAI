@@ -16,12 +16,14 @@ export default function StudentNotificationsScreen() {
     setLoading(true);
     try {
       // 1. Fetch data
-      const [sessAudits, examAudits, allSessions, allExams, allRooms] = await Promise.all([
+      const [sessAudits, examAudits, modAudits, allSessions, allExams, allRooms, allModules] = await Promise.all([
         ApiService.getSessionAudits(user.filiere_id),
         ApiService.getExamAudits(user.filiere_id),
+        ApiService.getModuleAudits(user.filiere_id),
         ApiService.getSessions(),
         ApiService.getExams(),
-        ApiService.getRooms()
+        ApiService.getRooms(),
+        ApiService.getModules()
       ]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -36,6 +38,8 @@ export default function StudentNotificationsScreen() {
           message = `Prof. ${session.professor_name || 'Instructor'} changed the room to "${roomName}" for the session on ${session.date}.`;
         } else if (audit.field === 'DATE') {
           message = `Prof. ${session.professor_name || 'Instructor'} rescheduled the session to ${audit.new}.`;
+        } else if (audit.field === 'CREATION') {
+          message = `A new session (${session.type}) has been scheduled for ${session.date} at ${session.start_time}.`;
         }
 
         return { ...audit, type: 'SESSION', message, moduleName: session.module_name };
@@ -51,13 +55,28 @@ export default function StudentNotificationsScreen() {
           message = `Exam room relocation: ${exam.module_name} is now in "${roomName}".`;
         } else if (audit.field === 'DATE') {
           message = `Exam reschedule: ${exam.module_name} moved to ${audit.new}.`;
+        } else if (audit.field === 'CREATION') {
+          message = `New exam scheduled: ${exam.module_name} on ${exam.date} at ${exam.start_time} in ${exam.room_name}.`;
         }
 
         return { ...audit, type: 'EXAM', message, moduleName: exam.module_name };
       });
 
-      // 4. Combine and Sort
-      const combined = [...processedSessions, ...processedExams].sort((a, b) => b.time.localeCompare(a.time));
+      // 4. Process Module Audits
+      const processedModules = modAudits.map(audit => {
+        const module = allModules.find(m => m.id === audit.module_id) || {};
+        
+        let message = '';
+        if (audit.field === 'CREATION') {
+          const profInfo = module.professor_name ? ` with Prof. ${module.professor_name}` : '';
+          message = `New module added to your program: ${module.name}${profInfo}.`;
+        }
+
+        return { ...audit, type: 'MODULE', message, moduleName: module.name };
+      });
+
+      // 5. Combine and Sort
+      const combined = [...processedSessions, ...processedExams, ...processedModules].sort((a, b) => b.time.localeCompare(a.time));
 
       setNotifications(combined.map(n => ({
         ...n,

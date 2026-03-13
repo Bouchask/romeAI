@@ -15,13 +15,16 @@ export default function StudentDashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [myModules, setMyModules] = useState([]);
   const [todayClasses, setTodayClasses] = useState([]);
+  const [recentUpdates, setRecentUpdates] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [modules, sessions] = await Promise.all([
+      const [modules, sessions, sessAudits, examAudits] = await Promise.all([
         ApiService.getModules(),
-        ApiService.getSessions()
+        ApiService.getSessions(),
+        ApiService.getSessionAudits(user.filiere_id),
+        ApiService.getExamAudits(user.filiere_id)
       ]);
 
       const filteredModules = Array.isArray(modules) ? modules.filter(m => m.filiere_id === user.filiere_id) : [];
@@ -39,6 +42,10 @@ export default function StudentDashboardScreen({ navigation }) {
       }) : [];
       
       setTodayClasses(todayFiltered);
+
+      // Process top 3 recent updates
+      const combined = [...sessAudits, ...examAudits].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 3);
+      setRecentUpdates(combined);
     } catch (err) {
       console.error(err);
       setMyModules([]);
@@ -78,6 +85,28 @@ export default function StudentDashboardScreen({ navigation }) {
               </View>
             </Card>
           ))
+        )}
+
+        {recentUpdates.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Updates</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+                <Text style={styles.viewAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <Card noPadding style={styles.updateCard}>
+              {recentUpdates.map((update, i) => (
+                <View key={i} style={[styles.updateItem, i === recentUpdates.length - 1 && styles.lastUpdate]}>
+                  <View style={[styles.dot, { backgroundColor: update.session_id ? theme.colors.primary : theme.colors.error }]} />
+                  <Text style={styles.updateText} numberOfLines={1}>
+                    {update.field === 'CREATION' ? 'New scheduled activity' : `Changed ${update.field.toLowerCase()}`}
+                  </Text>
+                  <Text style={styles.updateTime}>{new Date(update.time).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                </View>
+              ))}
+            </Card>
+          </>
         )}
 
         <Text style={styles.sectionTitle}>My Learning Path</Text>
@@ -120,5 +149,13 @@ const styles = StyleSheet.create({
   moduleName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.colors.text },
   emptyCard: { padding: 30, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
   emptyText: { color: theme.colors.textMuted, fontSize: 14, textAlign: 'center' },
-  emptyPadding: { padding: 30 }
+  emptyPadding: { padding: 30 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 },
+  viewAll: { fontSize: 12, color: theme.colors.primary, fontWeight: '700' },
+  updateCard: { marginBottom: 12 },
+  updateItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  lastUpdate: { borderBottomWidth: 0 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
+  updateText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+  updateTime: { fontSize: 11, color: theme.colors.textMuted }
 });

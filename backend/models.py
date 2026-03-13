@@ -221,3 +221,18 @@ class AuditExam(db.Model):
             "id": self.id, "exam_id": self.exam_id, "field": self.field_changed,
             "old": self.old_value, "new": self.new_value, "time": self.modification_time.isoformat()
         }
+
+class AuditModule(db.Model):
+    __tablename__ = 'audit_module'
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('modules.id'), nullable=False)
+    field_changed = db.Column(db.String(50))
+    old_value = db.Column(db.String(255))
+    new_value = db.Column(db.String(255))
+    modification_time = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "module_id": self.module_id, "field": self.field_changed,
+            "old": self.old_value, "new": self.new_value, "time": self.modification_time.isoformat()
+        }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Platform, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
@@ -16,11 +17,26 @@ export default function ExamDetailScreen({ navigation, route }) {
   
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
-  const [newDate, setNewDate] = useState(initialExam.date);
-  const [newStart, setNewStart] = useState(initialExam.start_time);
-  const [newEnd, setNewEnd] = useState(initialExam.end_time);
+  const [newDate, setNewDate] = useState(new Date(initialExam.date));
+  const [newStart, setNewStart] = useState(() => {
+    const d = new Date();
+    const [h, m] = initialExam.start_time.split(':');
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d;
+  });
+  const [newEnd, setNewEnd] = useState(() => {
+    const d = new Date();
+    const [h, m] = initialExam.end_time.split(':');
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d;
+  });
   const [selectedRoomId, setSelectedRoomId] = useState(initialExam.room_id);
   const [saving, setSaving] = useState(false);
+
+  // Picker visibility
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const fetchExamDetails = useCallback(async () => {
     setLoading(true);
@@ -33,7 +49,16 @@ export default function ExamDetailScreen({ navigation, route }) {
       ]);
 
       const freshExam = allExams.find(e => e.id === exam.id);
-      if (freshExam) setExam(freshExam);
+      if (freshExam) {
+        setExam(freshExam);
+        setNewDate(new Date(freshExam.date));
+        const [sh, sm] = freshExam.start_time.split(':');
+        const [eh, em] = freshExam.end_time.split(':');
+        const d1 = new Date(); d1.setHours(parseInt(sh), parseInt(sm), 0, 0);
+        const d2 = new Date(); d2.setHours(parseInt(eh), parseInt(em), 0, 0);
+        setNewStart(d1);
+        setNewEnd(d2);
+      }
 
       const currentModule = allModules.find(m => m.id === exam.module_id);
       const enrolled = allStudents.filter(s => s.filiere_id === currentModule?.filiere_id);
@@ -48,13 +73,59 @@ export default function ExamDetailScreen({ navigation, route }) {
 
   useEffect(() => { fetchExamDetails(); }, [fetchExamDetails]);
 
+  const formatDate = (date) => {
+    return date.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const formatTime = (time) => {
+    return time.toLocaleTimeString(undefined, { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+  };
+
   const handleUpdateExam = async () => {
+    // Time Validation: start < end and within university intervals
+    const startH = newStart.getHours();
+    const startM = newStart.getMinutes();
+    const endH = newEnd.getHours();
+    const endM = newEnd.getMinutes();
+    
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+
+    if (startTotal >= endTotal) {
+      const msg = 'End time must be after start time.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Invalid Time', msg);
+      return;
+    }
+
+    const isMorning = (startTotal >= 8 * 60 && endTotal <= 12 * 60);
+    const isAfternoon = (startTotal >= 14 * 60 && endTotal <= 18 * 60);
+
+    if (!isMorning && !isAfternoon) {
+      const msg = 'Exams must be scheduled within standard intervals:\nMorning: 08:00 - 12:00\nAfternoon: 14:00 - 18:00';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Outside Hours', msg);
+      return;
+    }
+
     setSaving(true);
     try {
+      const dateString = newDate.toISOString().split('T')[0];
+      const startTimeString = newStart.getHours().toString().padStart(2, '0') + ':' + 
+                              newStart.getMinutes().toString().padStart(2, '0');
+      const endTimeString = newEnd.getHours().toString().padStart(2, '0') + ':' + 
+                            newEnd.getMinutes().toString().padStart(2, '0');
+
       await ApiService.updateExam(exam.id, {
-        date: newDate,
-        start_time: newStart,
-        end_time: newEnd,
+        date: dateString,
+        start_time: startTimeString,
+        end_time: endTimeString,
         room_id: selectedRoomId
       });
       
@@ -101,19 +172,124 @@ export default function ExamDetailScreen({ navigation, route }) {
 
           {isEditing ? (
             <View style={styles.editForm}>
-              <Text style={styles.labelSmall}>DATE & TIME</Text>
-              <TextInput style={styles.input} value={newDate} onChangeText={setNewDate} type={Platform.OS === 'web' ? 'date' : 'default'} />
+              <Text style={styles.labelSmall}>DATE</Text>
+              {Platform.OS === 'web' ? (
+                <TextInput
+                  style={styles.input}
+                  value={newDate.toISOString().split('T')[0]}
+                  onChangeText={(val) => setNewDate(new Date(val))}
+                  placeholder="YYYY-MM-DD"
+                />
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateDisplay}
+                  onPress={() => {
+                    setShowDatePicker(!showDatePicker);
+                    setShowStartTimePicker(false);
+                    setShowEndTimePicker(false);
+                  }}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.dateDisplayText}>{formatDate(newDate)}</Text>
+                </TouchableOpacity>
+              )}
+              {!Platform.isWeb && showDatePicker && (
+                <DateTimePicker
+                  value={newDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(e, d) => { setShowDatePicker(Platform.OS === 'ios'); if(d) setNewDate(d); }}
+                />
+              )}
               
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.labelSmall}>START</Text>
-                  <TextInput style={styles.input} value={newStart} onChangeText={setNewStart} type={Platform.OS === 'web' ? 'time' : 'default'} />
+                  {Platform.OS === 'web' ? (
+                    <TextInput
+                      style={styles.input}
+                      value={newStart.getHours().toString().padStart(2, '0') + ':' + newStart.getMinutes().toString().padStart(2, '0')}
+                      onChangeText={(val) => {
+                        const [h, m] = val.split(':');
+                        if (h && m) {
+                          const d = new Date(newStart);
+                          d.setHours(parseInt(h), parseInt(m));
+                          setNewStart(d);
+                        }
+                      }}
+                      placeholder="HH:mm"
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.dateDisplay}
+                      onPress={() => {
+                        setShowStartTimePicker(!showStartTimePicker);
+                        setShowDatePicker(false);
+                        setShowEndTimePicker(false);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                      <Text style={styles.dateDisplayText}>{formatTime(newStart)}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.labelSmall}>END</Text>
-                  <TextInput style={styles.input} value={newEnd} onChangeText={setNewEnd} type={Platform.OS === 'web' ? 'time' : 'default'} />
+                  {Platform.OS === 'web' ? (
+                    <TextInput
+                      style={styles.input}
+                      value={newEnd.getHours().toString().padStart(2, '0') + ':' + newEnd.getMinutes().toString().padStart(2, '0')}
+                      onChangeText={(val) => {
+                        const [h, m] = val.split(':');
+                        if (h && m) {
+                          const d = new Date(newEnd);
+                          d.setHours(parseInt(h), parseInt(m));
+                          setNewEnd(d);
+                        }
+                      }}
+                      placeholder="HH:mm"
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.dateDisplay}
+                      onPress={() => {
+                        setShowEndTimePicker(!showEndTimePicker);
+                        setShowDatePicker(false);
+                        setShowStartTimePicker(false);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                      <Text style={styles.dateDisplayText}>{formatTime(newEnd)}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
+
+              {!Platform.isWeb && showStartTimePicker && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerHeader}>Select Start Time</Text>
+                  <DateTimePicker
+                    value={newStart}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, d) => { setShowStartTimePicker(Platform.OS === 'ios'); if(d) setNewStart(d); }}
+                  />
+                </View>
+              )}
+
+              {!Platform.isWeb && showEndTimePicker && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerHeader}>Select End Time</Text>
+                  <DateTimePicker
+                    value={newEnd}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, d) => { setShowEndTimePicker(Platform.OS === 'ios'); if(d) setNewEnd(d); }}
+                  />
+                </View>
+              )}
 
               <Text style={[styles.labelSmall, { marginTop: 12 }]}>EXAMINATION ROOM</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roomPicker}>
@@ -203,12 +379,45 @@ const styles = StyleSheet.create({
   stuName: { fontSize: 14, fontWeight: '700' },
   stuMeta: { fontSize: 12, color: theme.colors.textMuted },
   editForm: { gap: 12, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border },
-  labelSmall: { fontSize: 10, fontWeight: '800', color: theme.colors.textMuted },
+  labelSmall: { fontSize: 10, fontWeight: '800', color: theme.colors.textMuted, marginBottom: 4 },
   input: { backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, fontSize: 14, borderWidth: 1, borderColor: theme.colors.border },
-  row: { flexDirection: 'row', gap: 12 },
+  dateDisplay: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: theme.colors.accent, 
+    padding: 12, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    gap: 10
+  },
+  dateDisplayText: { fontSize: 14, color: theme.colors.text, fontWeight: '500' },
+  dateDisplayActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight + '10' },
+  row: { flexDirection: 'row', gap: 12, marginTop: 8 },
   roomPicker: { flexDirection: 'row', marginVertical: 10 },
   roomChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: theme.colors.accent, marginRight: 8, borderWidth: 1, borderColor: theme.colors.border },
   activeRoomChip: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   roomChipText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  activeRoomChipText: { color: '#FFF' }
+  activeRoomChipText: { color: '#FFF' },
+  pickerContainer: { 
+    marginTop: 20, 
+    padding: 15, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 15, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    ...theme.shadows.md,
+    minHeight: 250,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  pickerHeader: { 
+    fontSize: 11, 
+    fontWeight: '900', 
+    color: theme.colors.primary, 
+    marginBottom: 15, 
+    textAlign: 'center', 
+    textTransform: 'uppercase',
+    letterSpacing: 2
+  }
 });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
@@ -22,14 +23,23 @@ export default function CreateExamScreen({ navigation }) {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [sessionType, setSessionType] = useState('Normal');
   
-  // Default values
-  const tomorrowPlusOne = new Date();
-  tomorrowPlusOne.setDate(tomorrowPlusOne.getDate() + 3); // Today + 3 days to be safe
-  const defaultDate = tomorrowPlusOne.toISOString().split('T')[0];
+  // Date and Time State Objects
+  const [date, setDate] = useState(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
+  const [startTime, setStartTime] = useState(() => {
+    const d = new Date();
+    d.setHours(9, 0, 0, 0);
+    return d;
+  });
+  const [endTime, setEndTime] = useState(() => {
+    const d = new Date();
+    d.setHours(11, 0, 0, 0);
+    return d;
+  });
 
-  const [date, setDate] = useState(defaultDate);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('11:00');
+  // Picker visibility
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // Dropdown visibility
   const [showFiliereList, setShowFiliereList] = useState(false);
@@ -56,6 +66,22 @@ export default function CreateExamScreen({ navigation }) {
     fetchData();
   }, []);
 
+  const formatDate = (date) => {
+    return date.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const formatTime = (time) => {
+    return time.toLocaleTimeString(undefined, { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+  };
+
   const handleCreate = async () => {
     // 1. Basic empty check
     if (!selectedModule || !selectedRoom || !date || !startTime || !endTime) {
@@ -65,25 +91,57 @@ export default function CreateExamScreen({ navigation }) {
     }
 
     // 2. Date Validation: date > today + 2 days
-    const selectedDate = new Date(date);
     const minDate = new Date();
     minDate.setDate(minDate.getDate() + 2);
     minDate.setHours(0, 0, 0, 0);
 
-    if (selectedDate <= minDate) {
+    if (date <= minDate) {
       const msg = 'Exam must be scheduled at least 2 days in advance (Today + 2 days).';
       if (Platform.OS === 'web') alert(msg); else Alert.alert('Invalid Date', msg);
       return;
     }
 
+    // 3. Time Validation: start < end and within university intervals
+    const startH = startTime.getHours();
+    const startM = startTime.getMinutes();
+    const endH = endTime.getHours();
+    const endM = endTime.getMinutes();
+    
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+
+    if (startTotal >= endTotal) {
+      const msg = 'End time must be after start time.';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Invalid Time', msg);
+      return;
+    }
+
+    const isMorning = (startTotal >= 8 * 60 && endTotal <= 12 * 60);
+    const isAfternoon = (startTotal >= 14 * 60 && endTotal <= 18 * 60);
+
+    if (!isMorning && !isAfternoon) {
+      const msg = 'Exams must be scheduled within standard intervals:\nMorning: 08:00 - 12:00\nAfternoon: 14:00 - 18:00';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Outside Hours', msg);
+      return;
+    }
+
     setCreating(true);
     try {
+      // Format to YYYY-MM-DD
+      const dateString = date.toISOString().split('T')[0];
+      
+      // Format to HH:mm
+      const startTimeString = startTime.getHours().toString().padStart(2, '0') + ':' + 
+                              startTime.getMinutes().toString().padStart(2, '0');
+      const endTimeString = endTime.getHours().toString().padStart(2, '0') + ':' + 
+                            endTime.getMinutes().toString().padStart(2, '0');
+
       const examData = {
         module_id: selectedModule.id,
         room_id: selectedRoom.id,
-        date: date,
-        start_time: startTime,
-        end_time: endTime,
+        date: dateString,
+        start_time: startTimeString,
+        end_time: endTimeString,
         type: sessionType,
         status: 'Published'
       };
@@ -105,6 +163,24 @@ export default function CreateExamScreen({ navigation }) {
     } finally {
       setCreating(false);
     }
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
+  };
+
+  const onStartTimeChange = (event, selectedTime) => {
+    const currentTime = selectedTime || startTime;
+    setShowStartTimePicker(Platform.OS === 'ios');
+    setStartTime(currentTime);
+  };
+
+  const onEndTimeChange = (event, selectedTime) => {
+    const currentTime = selectedTime || endTime;
+    setShowEndTimePicker(Platform.OS === 'ios');
+    setEndTime(currentTime);
   };
 
   const filteredModules = selectedFiliere 
@@ -188,34 +264,125 @@ export default function CreateExamScreen({ navigation }) {
         <Card style={styles.formCard}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Exam Date (Today + 2 Days Min)</Text>
-            <TextInput 
-              style={styles.input} 
-              type={Platform.OS === 'web' ? 'date' : 'default'}
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-            />
+            {Platform.OS === 'web' ? (
+              <TextInput
+                style={styles.input}
+                value={date.toISOString().split('T')[0]}
+                onChangeText={(val) => setDate(new Date(val))}
+                placeholder="YYYY-MM-DD"
+              />
+            ) : (
+              <TouchableOpacity 
+                style={styles.dateDisplay}
+                onPress={() => {
+                  setShowDatePicker(!showDatePicker);
+                  setShowStartTimePicker(false);
+                  setShowEndTimePicker(false);
+                }}
+              >
+                <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+                <Text style={styles.dateDisplayText}>{formatDate(date)}</Text>
+              </TouchableOpacity>
+            )}
+            {!Platform.isWeb && showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+                minimumDate={new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)}
+              />
+            )}
           </View>
+          
           <View style={styles.row}>
             <View style={styles.flex1}>
               <Text style={styles.inputLabel}>Start Time</Text>
-              <TextInput 
-                style={styles.input} 
-                type={Platform.OS === 'web' ? 'time' : 'default'}
-                value={startTime}
-                onChangeText={setStartTime}
-              />
+              {Platform.OS === 'web' ? (
+                <TextInput
+                  style={styles.input}
+                  value={startTime.getHours().toString().padStart(2, '0') + ':' + startTime.getMinutes().toString().padStart(2, '0')}
+                  onChangeText={(val) => {
+                    const [h, m] = val.split(':');
+                    if (h && m) {
+                      const d = new Date(startTime);
+                      d.setHours(parseInt(h), parseInt(m));
+                      setStartTime(d);
+                    }
+                  }}
+                  placeholder="HH:mm"
+                />
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateDisplay}
+                  onPress={() => {
+                    setShowStartTimePicker(!showStartTimePicker);
+                    setShowDatePicker(false);
+                    setShowEndTimePicker(false);
+                  }}
+                >
+                  <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.dateDisplayText}>{formatTime(startTime)}</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.flex1}>
               <Text style={styles.inputLabel}>End Time</Text>
-              <TextInput 
-                style={styles.input} 
-                type={Platform.OS === 'web' ? 'time' : 'default'}
-                value={endTime}
-                onChangeText={setEndTime}
-              />
+              {Platform.OS === 'web' ? (
+                <TextInput
+                  style={styles.input}
+                  value={endTime.getHours().toString().padStart(2, '0') + ':' + endTime.getMinutes().toString().padStart(2, '0')}
+                  onChangeText={(val) => {
+                    const [h, m] = val.split(':');
+                    if (h && m) {
+                      const d = new Date(endTime);
+                      d.setHours(parseInt(h), parseInt(m));
+                      setEndTime(d);
+                    }
+                  }}
+                  placeholder="HH:mm"
+                />
+              ) : (
+                <TouchableOpacity 
+                  style={styles.dateDisplay}
+                  onPress={() => {
+                    setShowEndTimePicker(!showEndTimePicker);
+                    setShowDatePicker(false);
+                    setShowStartTimePicker(false);
+                  }}
+                >
+                  <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.dateDisplayText}>{formatTime(endTime)}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
+          
+          {!Platform.isWeb && showStartTimePicker && (
+            <View style={styles.pickerContainer}>
+              <Text style={styles.pickerHeader}>Select Start Time</Text>
+              <DateTimePicker
+                value={startTime}
+                mode="time"
+                is24Hour={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onStartTimeChange}
+              />
+            </View>
+          )}
+          
+          {!Platform.isWeb && showEndTimePicker && (
+            <View style={styles.pickerContainer}>
+              <Text style={styles.pickerHeader}>Select End Time</Text>
+              <DateTimePicker
+                value={endTime}
+                mode="time"
+                is24Hour={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onEndTimeChange}
+              />
+            </View>
+          )}
         </Card>
 
         <Text style={styles.label}>Room Assignment</Text>
@@ -270,7 +437,18 @@ const styles = StyleSheet.create({
   formCard: { padding: theme.spacing.lg, marginBottom: theme.spacing.md },
   inputGroup: { marginBottom: theme.spacing.md },
   inputLabel: { fontSize: 11, fontWeight: '800', color: theme.colors.textMuted, textTransform: 'uppercase', marginBottom: 8 },
-  input: { backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, fontSize: 15, color: theme.colors.text, borderWidth: 1, borderColor: theme.colors.border },
+  dateDisplay: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: theme.colors.accent, 
+    padding: 12, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    gap: 10
+  },
+  dateDisplayText: { fontSize: 15, color: theme.colors.text, fontWeight: '500' },
+  dateDisplayActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight + '10' },
   row: { flexDirection: 'row', gap: theme.spacing.md },
   flex1: { flex: 1 },
   roomInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -279,5 +457,26 @@ const styles = StyleSheet.create({
   dropdown: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: theme.colors.border },
   dropdownItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.accent },
   dropdownItemText: { fontSize: 14, color: theme.colors.text },
-  toggleRow: { flexDirection: 'row', gap: theme.spacing.md }
+  toggleRow: { flexDirection: 'row', gap: theme.spacing.md },
+  pickerContainer: { 
+    marginTop: 20, 
+    padding: 15, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 15, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    ...theme.shadows.md,
+    minHeight: 250,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  pickerHeader: { 
+    fontSize: 11, 
+    fontWeight: '900', 
+    color: theme.colors.primary, 
+    marginBottom: 15, 
+    textAlign: 'center', 
+    textTransform: 'uppercase',
+    letterSpacing: 2
+  }
 });

@@ -8,61 +8,51 @@ export const initDatabase = () => {
   }
   
   return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      // 1. Filieres
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS filieres (
+    try {
+      db.execSync(`
+        -- 1. Filieres
+        CREATE TABLE IF NOT EXISTS filieres (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE
-        );`
-      );
+        );
 
-      // 2. Professors
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS professors (
+        -- 2. Professors
+        CREATE TABLE IF NOT EXISTS professors (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
           email TEXT NOT NULL UNIQUE
-        );`
-      );
+        );
 
-      // 3. Modules
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS modules (
+        -- 3. Modules
+        CREATE TABLE IF NOT EXISTS modules (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
           filiereId INTEGER,
           professorId INTEGER,
           FOREIGN KEY (filiereId) REFERENCES filieres (id),
           FOREIGN KEY (professorId) REFERENCES professors (id)
-        );`
-      );
+        );
 
-      // 4. Students
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS students (
+        -- 4. Students
+        CREATE TABLE IF NOT EXISTS students (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
           email TEXT NOT NULL UNIQUE,
           filiereId INTEGER,
           FOREIGN KEY (filiereId) REFERENCES filieres (id)
-        );`
-      );
+        );
 
-      // 5. Rooms
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS rooms (
+        -- 5. Rooms
+        CREATE TABLE IF NOT EXISTS rooms (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           capacity INTEGER,
           type TEXT,
           status TEXT DEFAULT 'available'
-        );`
-      );
+        );
 
-      // 6. Sessions
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS sessions (
+        -- 6. Sessions
+        CREATE TABLE IF NOT EXISTS sessions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           moduleId INTEGER,
           roomId INTEGER,
@@ -72,12 +62,10 @@ export const initDatabase = () => {
           status TEXT DEFAULT 'scheduled',
           FOREIGN KEY (moduleId) REFERENCES modules (id),
           FOREIGN KEY (roomId) REFERENCES rooms (id)
-        );`
-      );
+        );
 
-      // 7. Attendance
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS attendance (
+        -- 7. Attendance
+        CREATE TABLE IF NOT EXISTS attendance (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           sessionId INTEGER,
           studentId INTEGER,
@@ -85,14 +73,13 @@ export const initDatabase = () => {
           markedAt TEXT DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (sessionId) REFERENCES sessions (id),
           FOREIGN KEY (studentId) REFERENCES students (id)
-        );`
-      );
-    }, (error) => {
-      console.log('Database init error:', error);
-      reject(error);
-    }, () => {
+        );
+      `);
       console.log('Database initialized successfully');
       resolve();
-    });
+    } catch (error) {
+      console.log('Database init error:', error);
+      reject(error);
+    }
   });
 };

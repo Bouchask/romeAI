@@ -20,6 +20,9 @@ export default function RoomManagementScreen({ navigation }) {
   const [newLienGps, setNewLienGps] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Filter State
+  const [filterType, setFilterType] = useState('All'); // 'All', 'Cours', 'TD', 'TP'
+
   const fetchRooms = useCallback(async () => {
     setLoading(true);
     try {
@@ -31,6 +34,24 @@ export default function RoomManagementScreen({ navigation }) {
       setLoading(false);
     }
   }, []);
+
+  const getFilteredRooms = () => {
+    if (filterType === 'All') return rooms;
+    return rooms.filter(r => {
+      const roomType = r.type || 'Classroom';
+      if (filterType === 'Cours') return roomType === 'Classroom' || roomType === 'Amphi';
+      if (filterType === 'TD') return roomType === 'Classroom' || roomType === 'TD';
+      if (filterType === 'TP') return roomType === 'Lab' || roomType === 'TP';
+      return true;
+    });
+  };
+
+  const getDisplayType = (type) => {
+    if (!type || type === 'Classroom') return 'Cours';
+    return type;
+  };
+
+  const filteredRooms = getFilteredRooms();
 
   // Refresh data whenever screen comes into focus
   useEffect(() => {
@@ -50,6 +71,7 @@ export default function RoomManagementScreen({ navigation }) {
       await ApiService.addRoom({
         name: newName,
         capacity: parseInt(newCapacity),
+        type: 'Classroom',
         lien_gps: newLienGps
       });
       setNewName('');
@@ -90,15 +112,28 @@ export default function RoomManagementScreen({ navigation }) {
         />
         <View style={styles.content}>
           <View style={styles.summaryRow}>
-            <Text style={styles.countText}>{rooms.length} Total Classrooms</Text>
+            <Text style={styles.countText}>{filteredRooms.length} Classrooms Showing</Text>
           </View>
 
-          {rooms.length === 0 ? (
+          {/* Filter Chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+            {['All', 'Cours', 'TD', 'TP'].map(type => (
+              <TouchableOpacity 
+                key={type} 
+                style={[styles.filterChip, filterType === type && styles.activeFilterChip]}
+                onPress={() => setFilterType(type)}
+              >
+                <Text style={[styles.filterChipText, filterType === type && styles.activeFilterChipText]}>{type}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {filteredRooms.length === 0 ? (
             <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No classrooms registered yet.</Text>
+              <Text style={styles.emptyText}>No classrooms match this filter.</Text>
             </Card>
           ) : (
-            rooms.map((r) => (
+            filteredRooms.map((r) => (
               <Card key={r.id} style={styles.roomCard}>
                 <View style={styles.row}>
                   <View style={styles.body}>
@@ -116,7 +151,7 @@ export default function RoomManagementScreen({ navigation }) {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.typeText}>{r.type || 'Standard'} · Capacity: {r.capacity}</Text>
+                    <Text style={styles.typeText}>{getDisplayType(r.type)} · Capacity: {r.capacity}</Text>
                     
                     <View style={styles.amenitiesRow}>
                       <View style={styles.amenity}>
@@ -246,6 +281,11 @@ const styles = StyleSheet.create({
   usageFill: { height: '100%', backgroundColor: theme.colors.primary },
   usageText: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '600' },
   exportBtn: { marginTop: theme.spacing.lg },
+  filterScroll: { flexDirection: 'row', marginBottom: theme.spacing.lg },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.accent, marginRight: 10, borderWidth: 1, borderColor: theme.colors.border },
+  activeFilterChip: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  filterChipText: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },
+  activeFilterChipText: { color: '#FFF' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   emptyCard: { padding: theme.spacing.xl, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
   emptyText: { color: theme.colors.textMuted, fontSize: 14 },

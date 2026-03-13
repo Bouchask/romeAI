@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from .models import db, Student, Professor, Filiere, Module, Room, Exam, Admin, Session, Department, Attendance, AuditSession, AuditExam
+from .models import db, Student, Professor, Filiere, Module, Room, Exam, Admin, Session, Department, Attendance, AuditSession, AuditExam, AuditModule
 from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
@@ -76,7 +76,10 @@ def add_module():
         f_id = int(data['filiere_id'])
         if Module.query.filter_by(filiere_id=f_id).count() >= 7: return jsonify({"message": "Filiere full"}), 400
         new_m = Module(name=data['name'], filiere_id=f_id, professor_id=data.get('professor_id'))
-        db.session.add(new_m); db.session.commit()
+        db.session.add(new_m)
+        db.session.flush()
+        db.session.add(AuditModule(module_id=new_m.id, field_changed="CREATION", old_value="None", new_value=f"New module: {new_m.name}"))
+        db.session.commit()
         return jsonify(new_m.to_dict()), 201
     except Exception as e:
         db.session.rollback(); return jsonify({"message": str(e)}), 500
@@ -92,26 +95,80 @@ def add_session():
     try:
         mid, rid = int(data['module_id']), int(data['room_id'])
         date_str, start, end = data['date'], data['start_time'], data['end_time']
-        conf = Session.query.filter_by(room_id=rid, date=date_str).all()
-        for s in conf:
-            if check_time_overlap(start, end, s.start_time, s.end_time): return jsonify({"message": "Room booked"}), 400
-        new_session = Session(module_id=mid, room_id=rid, type=data['type'], date=date_str, start_time=start, end_time=end, day=data['day'])
-        db.session.add(new_session); db.session.commit()
+        
+        # Check for overlap with other teaching sessions
+        conf_sessions = Session.query.filter_by(room_id=rid, date=date_str).all()
+        for s in conf_sessions:
+            if check_time_overlap(start, end, s.start_time, s.end_time):
+                return jsonify({"message": f"Room already booked for a session from {s.start_time} to {s.end_time}"}), 400
+        
+        # Check for overlap with exams
+        conf_exams = Exam.query.filter_by(room_id=rid, date=date_str).all()
+        for e in conf_exams:
+            if check_time_overlap(start, end, e.start_time, e.end_time):
+                return jsonify({"message": f"Room already booked for an exam from {e.start_time} to {e.end_time}"}), 400
+
+        new_session = Session(
+            module_id=mid, 
+            room_id=rid, 
+            type=data['type'], 
+            date=date_str, 
+            start_time=start, 
+            end_time=end, 
+            day=data['day']
+        )
+        db.session.add(new_session)
+        db.session.flush() # Get session ID
+        
+        # Add creation audit for notification
+        db.session.add(AuditSession(
+            session_id=new_session.id,
+            field_changed="CREATION",
+            old_value="None",
+            new_value=f"{new_session.type} scheduled"
+        ))
+        
+        db.session.commit()
         return jsonify(new_session.to_dict()), 201
     except Exception as e:
-        db.session.rollback(); return jsonify({"message": str(e)}), 500
+        db.session.rollback()
+        return jsonify({"message": str(e)}), 500
 
 @api_bp.route('/sessions/<int:id>', methods=['PUT'])
 def update_session(id):
-    session = Session.query.get_or_404(id); data = request.json
-    if data.get('room_id') and int(data['room_id']) != session.room_id:
-        db.session.add(AuditSession(session_id=session.id, field_changed="ROOM", old_value=str(session.room_id), new_value=str(data['room_id'])))
-        session.room_id = int(data['room_id'])
-    if data.get('date') and data['date'] != session.date:
-        db.session.add(AuditSession(session_id=session.id, field_changed="DATE", old_value=str(session.date), new_value=str(data['date'])))
-        session.date = data['date']
-    session.start_time, session.end_time = data.get('start_time', session.start_time), data.get('end_time', session.end_time)
-    db.session.commit(); return jsonify(session.to_dict())
+    session = Session.query.get_or_404(id)
+    data = request.json
+    try:
+        new_rid = int(data.get('room_id', session.room_id))
+        new_date = data.get('date', session.date)
+        new_start = data.get('start_time', session.start_time)
+        new_end = data.get('end_time', session.end_time)
+
+        # Check for overlap excluding current session
+        conf_sessions = Session.query.filter(Session.room_id == new_rid, Session.date == new_date, Session.id != session.id).all()
+        for s in conf_sessions:
+            if check_time_overlap(new_start, new_end, s.start_time, s.end_time):
+                return jsonify({"message": "Room booked for another session"}), 400
+        
+        conf_exams = Exam.query.filter_by(room_id=new_rid, date=new_date).all()
+        for e in conf_exams:
+            if check_time_overlap(new_start, new_end, e.start_time, e.end_time):
+                return jsonify({"message": "Room booked for an exam"}), 400
+
+        if int(data.get('room_id', session.room_id)) != session.room_id:
+            db.session.add(AuditSession(session_id=session.id, field_changed="ROOM", old_value=str(session.room_id), new_value=str(data['room_id'])))
+            session.room_id = int(data['room_id'])
+        if data.get('date') and data['date'] != session.date:
+            db.session.add(AuditSession(session_id=session.id, field_changed="DATE", old_value=str(session.date), new_value=str(data['date'])))
+            session.date = data['date']
+            
+        session.start_time = new_start
+        session.end_time = new_end
+        db.session.commit()
+        return jsonify(session.to_dict())
+    except Exception as ex:
+        db.session.rollback()
+        return jsonify({"message": str(ex)}), 500
 
 @api_bp.route('/sessions/<int:id>', methods=['DELETE'])
 def delete_session(id):
@@ -131,6 +188,13 @@ def get_exam_audits():
     query = AuditExam.query.join(Exam).join(Module)
     if fid: query = query.filter(Module.filiere_id == int(fid))
     return jsonify([a.to_dict() for a in query.order_by(AuditExam.modification_time.desc()).all()])
+
+@api_bp.route('/audits/modules', methods=['GET'])
+def get_module_audits():
+    fid = request.args.get('filiere_id')
+    query = AuditModule.query.join(Module)
+    if fid: query = query.filter(Module.filiere_id == int(fid))
+    return jsonify([a.to_dict() for a in query.order_by(AuditModule.modification_time.desc()).all()])
 
 # --- Users ---
 @api_bp.route('/students', methods=['GET'])
@@ -208,20 +272,82 @@ def get_exams(): return jsonify([e.to_dict() for e in Exam.query.all()])
 @api_bp.route('/exams', methods=['POST'])
 def add_exam():
     data = request.json
-    new_e = Exam(module_id=int(data['module_id']), room_id=int(data['room_id']), date=data['date'], start_time=data['start_time'], end_time=data['end_time'], type=data.get('type', 'Normal'))
-    db.session.add(new_e); db.session.commit(); return jsonify(new_e.to_dict()), 201
+    try:
+        rid = int(data['room_id'])
+        date_str, start, end = data['date'], data['start_time'], data['end_time']
+        
+        # Check for overlap with other exams in the same room
+        conf_exams = Exam.query.filter_by(room_id=rid, date=date_str).all()
+        for e in conf_exams:
+            if check_time_overlap(start, end, e.start_time, e.end_time):
+                return jsonify({"message": f"Room already booked for an exam from {e.start_time} to {e.end_time}"}), 400
+        
+        # Check for overlap with teaching sessions in the same room
+        conf_sessions = Session.query.filter_by(room_id=rid, date=date_str).all()
+        for s in conf_sessions:
+            if check_time_overlap(start, end, s.start_time, s.end_time):
+                return jsonify({"message": f"Room already booked for a teaching session from {s.start_time} to {s.end_time}"}), 400
+
+        new_e = Exam(
+            module_id=int(data['module_id']), 
+            room_id=rid, 
+            date=date_str, 
+            start_time=start, 
+            end_time=end, 
+            type=data.get('type', 'Normal')
+        )
+        db.session.add(new_e)
+        db.session.flush() # Get exam ID
+        
+        # Add creation audit for notification
+        db.session.add(AuditExam(
+            exam_id=new_e.id,
+            field_changed="CREATION",
+            old_value="None",
+            new_value=f"Exam ({new_e.type}) scheduled"
+        ))
+        
+        db.session.commit()
+        return jsonify(new_e.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": str(e)}), 500
 
 @api_bp.route('/exams/<int:id>', methods=['PUT'])
 def update_exam(id):
-    e = Exam.query.get_or_404(id); data = request.json
-    if data.get('room_id') and int(data['room_id']) != e.room_id:
-        db.session.add(AuditExam(exam_id=e.id, field_changed="ROOM", old_value=str(e.room_id), new_value=str(data['room_id'])))
-        e.room_id = int(data['room_id'])
-    if data.get('date') and data['date'] != e.date:
-        db.session.add(AuditExam(exam_id=e.id, field_changed="DATE", old_value=str(e.date), new_value=str(data['date'])))
-        e.date = data['date']
-    e.start_time, e.end_time = data.get('start_time', e.start_time), data.get('end_time', e.end_time)
-    db.session.commit(); return jsonify(e.to_dict())
+    e = Exam.query.get_or_404(id)
+    data = request.json
+    try:
+        new_rid = int(data.get('room_id', e.room_id))
+        new_date = data.get('date', e.date)
+        new_start = data.get('start_time', e.start_time)
+        new_end = data.get('end_time', e.end_time)
+
+        # Check for overlap excluding current exam
+        conf_exams = Exam.query.filter(Exam.room_id == new_rid, Exam.date == new_date, Exam.id != e.id).all()
+        for ex in conf_exams:
+            if check_time_overlap(new_start, new_end, ex.start_time, ex.end_time):
+                return jsonify({"message": "Room booked for another exam"}), 400
+        
+        conf_sessions = Session.query.filter_by(room_id=new_rid, date=new_date).all()
+        for s in conf_sessions:
+            if check_time_overlap(new_start, new_end, s.start_time, s.end_time):
+                return jsonify({"message": "Room booked for a teaching session"}), 400
+
+        if int(data.get('room_id', e.room_id)) != e.room_id:
+            db.session.add(AuditExam(exam_id=e.id, field_changed="ROOM", old_value=str(e.room_id), new_value=str(data['room_id'])))
+            e.room_id = int(data['room_id'])
+        if data.get('date') and data['date'] != e.date:
+            db.session.add(AuditExam(exam_id=e.id, field_changed="DATE", old_value=str(e.date), new_value=str(data['date'])))
+            e.date = data['date']
+        
+        e.start_time = new_start
+        e.end_time = new_end
+        db.session.commit()
+        return jsonify(e.to_dict())
+    except Exception as ex:
+        db.session.rollback()
+        return jsonify({"message": str(ex)}), 500
 
 # --- Attendance ---
 @api_bp.route('/attendance', methods=['POST'])

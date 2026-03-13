@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Card } from '../../components/Card';
@@ -16,9 +17,23 @@ export default function ModifySessionScreen({ navigation, route }) {
   
   // Form State
   const [changeType, setChangeType] = useState('time'); // 'time' or 'room'
-  const [newStartTime, setNewStartTime] = useState(session.start_time);
-  const [newEndTime, setNewEndTime] = useState(session.end_time);
+  const [newStartTime, setNewStartTime] = useState(() => {
+    const d = new Date();
+    const [h, m] = session.start_time.split(':');
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d;
+  });
+  const [newEndTime, setNewEndTime] = useState(() => {
+    const d = new Date();
+    const [h, m] = session.end_time.split(':');
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d;
+  });
   const [selectedRoomId, setSelectedRoomId] = useState(session.room_id);
+
+  // Picker visibility
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -38,11 +53,21 @@ export default function ModifySessionScreen({ navigation, route }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const formatTime = (time) => {
+    return time.toLocaleTimeString(undefined, { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+  };
+
   // Logic to find free rooms matching session type
   const getAvailableRooms = () => {
+    const startTimeStr = newStartTime.getHours().toString().padStart(2, '0') + ':' + newStartTime.getMinutes().toString().padStart(2, '0');
+    const endTimeStr = newEndTime.getHours().toString().padStart(2, '0') + ':' + newEndTime.getMinutes().toString().padStart(2, '0');
+
     return allRooms.filter(room => {
       // 1. Type Match
-      // Standard: Cours/TD -> Classroom/Amphi, TP -> Lab
       if (session.type === 'TP' && room.type !== 'Lab') return false;
       if ((session.type === 'Cours' || session.type === 'TD') && room.type === 'Lab') return false;
 
@@ -50,7 +75,7 @@ export default function ModifySessionScreen({ navigation, route }) {
       const hasConflict = allSessions.some(s => 
         s.room_id === room.id && 
         s.date === session.date && 
-        !(newEndTime <= s.start_time || newStartTime >= s.end_time)
+        !(endTimeStr <= s.start_time || startTimeStr >= s.end_time)
       );
       
       return !hasConflict;
@@ -58,16 +83,33 @@ export default function ModifySessionScreen({ navigation, route }) {
   };
 
   const handleUpdate = async () => {
-    if (changeType === 'time' && newEndTime <= newStartTime) {
+    const startTotal = newStartTime.getHours() * 60 + newStartTime.getMinutes();
+    const endTotal = newEndTime.getHours() * 60 + newEndTime.getMinutes();
+
+    if (startTotal >= endTotal) {
       alert('End time must be after start time');
+      return;
+    }
+
+    const isMorning = (startTotal >= 8 * 60 && endTotal <= 12 * 60);
+    const isAfternoon = (startTotal >= 14 * 60 && endTotal <= 18 * 60);
+
+    if (!isMorning && !isAfternoon) {
+      const msg = 'Classes must be scheduled within standard intervals:\nMorning: 08:00 - 12:00\nAfternoon: 14:00 - 18:00';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('Outside Hours', msg);
       return;
     }
 
     setUpdating(true);
     try {
+      const startTimeString = newStartTime.getHours().toString().padStart(2, '0') + ':' + 
+                              newStartTime.getMinutes().toString().padStart(2, '0');
+      const endTimeString = newEndTime.getHours().toString().padStart(2, '0') + ':' + 
+                            newEndTime.getMinutes().toString().padStart(2, '0');
+
       await ApiService.updateSession(session.id, {
-        start_time: newStartTime,
-        end_time: newEndTime,
+        start_time: startTimeString,
+        end_time: endTimeString,
         room_id: selectedRoomId,
         date: session.date,
         day: session.day,
@@ -145,23 +187,90 @@ export default function ModifySessionScreen({ navigation, route }) {
               <View style={styles.timeRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>New Start</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    value={newStartTime} 
-                    onChangeText={setNewStartTime} 
-                    type={Platform.OS === 'web' ? 'time' : 'default'} 
-                  />
+                  {Platform.OS === 'web' ? (
+                    <TextInput 
+                      style={styles.input} 
+                      value={newStartTime.getHours().toString().padStart(2, '0') + ':' + newStartTime.getMinutes().toString().padStart(2, '0')} 
+                      onChangeText={(val) => {
+                        const [h, m] = val.split(':');
+                        if (h && m) {
+                          const d = new Date(newStartTime);
+                          d.setHours(parseInt(h), parseInt(m));
+                          setNewStartTime(d);
+                        }
+                      }} 
+                      placeholder="HH:mm"
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.dateDisplay, showStartTimePicker && styles.dateDisplayActive]}
+                      onPress={() => {
+                        setShowStartTimePicker(!showStartTimePicker);
+                        setShowEndTimePicker(false);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                      <Text style={styles.dateDisplayText}>{formatTime(newStartTime)}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>New End</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    value={newEndTime} 
-                    onChangeText={setNewEndTime} 
-                    type={Platform.OS === 'web' ? 'time' : 'default'} 
-                  />
+                  {Platform.OS === 'web' ? (
+                    <TextInput 
+                      style={styles.input} 
+                      value={newEndTime.getHours().toString().padStart(2, '0') + ':' + newEndTime.getMinutes().toString().padStart(2, '0')} 
+                      onChangeText={(val) => {
+                        const [h, m] = val.split(':');
+                        if (h && m) {
+                          const d = new Date(newEndTime);
+                          d.setHours(parseInt(h), parseInt(m));
+                          setNewEndTime(d);
+                        }
+                      }} 
+                      placeholder="HH:mm"
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.dateDisplay, showEndTimePicker && styles.dateDisplayActive]}
+                      onPress={() => {
+                        setShowEndTimePicker(!showEndTimePicker);
+                        setShowStartTimePicker(false);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                      <Text style={styles.dateDisplayText}>{formatTime(newEndTime)}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
+
+              {!Platform.isWeb && showStartTimePicker && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerHeader}>Select New Start Time</Text>
+                  <DateTimePicker
+                    value={newStartTime}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, d) => { setShowStartTimePicker(Platform.OS === 'ios'); if(d) setNewStartTime(d); }}
+                  />
+                </View>
+              )}
+
+              {!Platform.isWeb && showEndTimePicker && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerHeader}>Select New End Time</Text>
+                  <DateTimePicker
+                    value={newEndTime}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, d) => { setShowEndTimePicker(Platform.OS === 'ios'); if(d) setNewEndTime(d); }}
+                  />
+                </View>
+              )}
+
               <Text style={styles.hint}>Changing time will automatically re-verify room availability.</Text>
             </Card>
           </>
@@ -214,6 +323,18 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 10, fontWeight: '800', color: theme.colors.textMuted, marginBottom: 8 },
   timeRow: { flexDirection: 'row', gap: 16 },
   input: { backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, fontSize: 14, borderWidth: 1, borderColor: theme.colors.border },
+  dateDisplay: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: theme.colors.accent, 
+    padding: 12, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    gap: 10
+  },
+  dateDisplayText: { fontSize: 14, color: theme.colors.text, fontWeight: '500' },
+  dateDisplayActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight + '10' },
   hint: { fontSize: 11, color: theme.colors.textMuted, marginTop: 12, fontStyle: 'italic' },
   roomOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: 12 },
   activeRoomOption: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight + '05' },
@@ -223,5 +344,26 @@ const styles = StyleSheet.create({
   deleteBtn: { alignItems: 'center', paddingVertical: 12 },
   deleteText: { color: theme.colors.error, fontWeight: '700', fontSize: 14 },
   emptyCard: { borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border, padding: 20, alignItems: 'center' },
-  emptyText: { color: theme.colors.textMuted, textAlign: 'center', fontSize: 13 }
+  emptyText: { color: theme.colors.textMuted, textAlign: 'center', fontSize: 13 },
+  pickerContainer: { 
+    marginTop: 20, 
+    padding: 15, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 15, 
+    borderWidth: 1, 
+    borderColor: theme.colors.border,
+    ...theme.shadows.md,
+    minHeight: 250,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  pickerHeader: { 
+    fontSize: 11, 
+    fontWeight: '900', 
+    color: theme.colors.primary, 
+    marginBottom: 15, 
+    textAlign: 'center', 
+    textTransform: 'uppercase',
+    letterSpacing: 2
+  }
 });

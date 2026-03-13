@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The Ngrok URL is defined as a constant for easy updates
-const BASE_URL = 'https://8883-160-179-7-49.ngrok-free.app/api';
+const BASE_URL = 'https://c153-196-112-192-3.ngrok-free.app/api';
 
 // Create the axios instance as a constant
 export const api = axios.create({
@@ -53,6 +53,7 @@ export const ApiService = {
   submitAttendance: (data) => api.post('/attendance', data).then(res => res.data),
   getSessionAudits: (fid) => api.get(`/audits/sessions?filiere_id=${fid}`).then(res => res.data),
   getExamAudits: (fid) => api.get(`/audits/exams?filiere_id=${fid}`).then(res => res.data),
+  getModuleAudits: (fid) => api.get(`/audits/modules?filiere_id=${fid}`).then(res => res.data),
   
   // General Data
   getDepartments: () => api.get('/departments').then(res => res.data),
