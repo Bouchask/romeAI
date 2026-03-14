@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The Ngrok URL is defined as a constant for easy updates
-const BASE_URL = 'https://c153-196-112-192-3.ngrok-free.app/api';
+const BASE_URL = 'https://281c-196-112-77-64.ngrok-free.app/api';
 
 // Create the axios instance as a constant
 export const api = axios.create({

@@ -16,6 +16,7 @@ export default function CreateExamScreen({ navigation }) {
   const [filieres, setFilieres] = useState([]);
   const [modules, setModules] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [existingExams, setExistingExams] = useState([]);
 
   // Form State
   const [selectedFiliere, setSelectedFiliere] = useState(null);
@@ -45,18 +46,21 @@ export default function CreateExamScreen({ navigation }) {
   const [showFiliereList, setShowFiliereList] = useState(false);
   const [showModuleList, setShowModuleList] = useState(false);
   const [showRoomList, setShowRoomList] = useState(false);
+  const [showTypeList, setShowTypeList] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [fData, mData, rData] = await Promise.all([
+        const [fData, mData, rData, eData] = await Promise.all([
           ApiService.getFilieres(),
           ApiService.getModules(),
-          ApiService.getRooms()
+          ApiService.getRooms(),
+          ApiService.getExams()
         ]);
         setFilieres(fData);
         setModules(mData);
         setRooms(rData.filter(r => r.status === 'active'));
+        setExistingExams(eData);
       } catch (err) {
         console.error('Fetch error:', err);
       } finally {
@@ -410,6 +414,55 @@ export default function CreateExamScreen({ navigation }) {
                   <Text style={styles.dropdownItemText}>{r.name} (Cap: {r.capacity})</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          )}
+        </Card>
+
+        <Text style={styles.label}>Exam Session Type</Text>
+        <Card style={styles.pickerCard} noPadding>
+          <TouchableOpacity 
+            style={styles.picker}
+            onPress={() => {
+              if (!selectedModule) {
+                Alert.alert('Notice', 'Please select a module first');
+                return;
+              }
+              setShowTypeList(!showTypeList);
+            }}
+          >
+            <View style={styles.roomInfo}>
+              <Ionicons name="list" size={18} color={theme.colors.primary} />
+              <Text style={styles.pickerTextSelected}>
+                {sessionType} Session
+              </Text>
+            </View>
+            <Ionicons name={showTypeList ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+          {showTypeList && (
+            <View style={styles.dropdown}>
+              {(() => {
+                const moduleExams = existingExams.filter(e => e.module_id === selectedModule?.id);
+                const hasNormal = moduleExams.some(e => e.type === 'Normal');
+                const hasRatt = moduleExams.some(e => e.type === 'Rattrapage');
+                
+                const options = [];
+                if (!hasNormal) options.push('Normal');
+                if (!hasRatt) options.push('Rattrapage');
+
+                if (options.length === 0) {
+                  return <View style={styles.dropdownItem}><Text style={styles.dropdownItemText}>Both Normal and Rattrapage exams exist.</Text></View>;
+                }
+
+                return options.map(type => (
+                  <TouchableOpacity 
+                    key={type} 
+                    style={styles.dropdownItem}
+                    onPress={() => { setSessionType(type); setShowTypeList(false); }}
+                  >
+                    <Text style={styles.dropdownItemText}>{type} Session</Text>
+                  </TouchableOpacity>
+                ));
+              })()}
             </View>
           )}
         </Card>

@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import StudentStack from './StudentStack';
 import ScheduleStack from './ScheduleStack';
-import StudentExamScheduleScreen from '../screens/student/StudentExamScheduleScreen';
+import StudentExamsStack from './StudentExamsStack';
 import StudentNotificationsScreen from '../screens/student/StudentNotificationsScreen';
 import StudentProfileScreen from '../screens/student/StudentProfileScreen';
 import { theme } from '../theme';
@@ -46,7 +46,11 @@ export default function StudentTabs() {
         component={ScheduleStack} 
         options={{ title: 'Schedule', tabBarLabel: 'Schedule' }} 
       />
-      <Tab.Screen name="Exams" component={StudentExamScheduleScreen} />
+      <Tab.Screen 
+        name="Exams" 
+        component={StudentExamsStack} 
+        options={{ title: 'Exams', tabBarLabel: 'Exams' }} 
+      />
       <Tab.Screen name="Notifications" component={StudentNotificationsScreen} />
       <Tab.Screen name="Profile" component={StudentProfileScreen} />
     </Tab.Navigator>

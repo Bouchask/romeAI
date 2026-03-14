@@ -18,6 +18,7 @@ export default function ModifyRoomScreen({ navigation, route }) {
   const [hasWifi, setHasWifi] = useState(!!room.has_wifi);
   const [hasProjector, setHasProjector] = useState(!!room.has_projector);
   const [lienGps, setLienGps] = useState(room.lien_gps || '');
+  const [status, setStatus] = useState(room.status || 'active');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -34,7 +35,7 @@ export default function ModifyRoomScreen({ navigation, route }) {
         has_wifi: hasWifi,
         has_projector: hasProjector,
         lien_gps: lienGps,
-        status: room.status
+        status: status
       });
       if (Platform.OS === 'web') alert("Updated successfully"); else Alert.alert("Success", "Updated");
       navigation.goBack();
@@ -55,6 +56,24 @@ export default function ModifyRoomScreen({ navigation, route }) {
 
           <Text style={styles.label}>CAPACITY (SEATS)</Text>
           <TextInput style={styles.input} value={capacity} onChangeText={setCapacity} keyboardType="numeric" />
+
+          <Text style={styles.label}>AVAILABILITY STATUS</Text>
+          <View style={styles.row}>
+            <TouchableOpacity 
+              style={[styles.statusToggle, status === 'active' && styles.activeStatus]} 
+              onPress={() => setStatus('active')}
+            >
+              <Ionicons name="checkmark-circle" size={18} color={status === 'active' ? "#FFF" : theme.colors.textSecondary} />
+              <Text style={[styles.statusText, status === 'active' && styles.activeStatusText]}>Active</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.statusToggle, status === 'maintenance' && styles.maintStatus]} 
+              onPress={() => setStatus('maintenance')}
+            >
+              <Ionicons name="construct" size={18} color={status === 'maintenance' ? "#FFF" : theme.colors.textSecondary} />
+              <Text style={[styles.statusText, status === 'maintenance' && styles.activeStatusText]}>Maintenance</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.label}>CATEGORY</Text>
           <View style={styles.row}>
@@ -100,6 +119,11 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   chipText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
   activeChipText: { color: '#FFF' },
+  statusToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 10, backgroundColor: theme.colors.accent, borderWidth: 1, borderColor: theme.colors.border },
+  activeStatus: { backgroundColor: theme.colors.success, borderColor: theme.colors.success },
+  maintStatus: { backgroundColor: theme.colors.error, borderColor: theme.colors.error },
+  statusText: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },
+  activeStatusText: { color: '#FFF' },
   amenity: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 12, borderRadius: 10, backgroundColor: theme.colors.accent, borderWidth: 1, borderColor: theme.colors.border },
   activeAmenity: { backgroundColor: theme.colors.success, borderColor: theme.colors.success },
   amenityText: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },

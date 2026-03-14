@@ -273,6 +273,21 @@ def get_exams(): return jsonify([e.to_dict() for e in Exam.query.all()])
 def add_exam():
     data = request.json
     try:
+        mid = int(data['module_id'])
+        etype = data.get('type', 'Normal')
+        
+        # Rule: Only one Normal and one Rattrapage per module
+        existing_exams = Exam.query.filter_by(module_id=mid).all()
+        has_normal = any(e.type == 'Normal' for e in existing_exams)
+        has_ratt = any(e.type == 'Rattrapage' for e in existing_exams)
+        
+        if etype == 'Normal' and has_normal:
+            return jsonify({"message": "A Normal session exam already exists for this module."}), 400
+        if etype == 'Rattrapage' and has_ratt:
+            return jsonify({"message": "A Rattrapage session exam already exists for this module."}), 400
+        if has_normal and has_ratt:
+            return jsonify({"message": "Both Normal and Rattrapage exams already exist for this module. No more exams allowed."}), 400
+
         rid = int(data['room_id'])
         date_str, start, end = data['date'], data['start_time'], data['end_time']
         

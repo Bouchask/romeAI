@@ -13,24 +13,28 @@ export default function ProfessorDetailScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [myModules, setMyModules] = useState([]);
   const [availableModules, setAvailableModules] = useState([]);
+  const [departments, setDepartments] = useState([]);
   
   // States
   const [showAssign, setShowAssign] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showDeptChange, setShowDeptChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [processing, setProcessing] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [allModules, allProfs] = await Promise.all([
+      const [allModules, allProfs, allDepts] = await Promise.all([
         ApiService.getModules(),
-        ApiService.getProfessors()
+        ApiService.getProfessors(),
+        ApiService.getDepartments()
       ]);
       const freshProf = allProfs.find(p => p.id === professor.id);
       if (freshProf) setProfessor(freshProf);
       setMyModules(allModules.filter(m => m.professor_id === professor.id));
       setAvailableModules(allModules.filter(m => !m.professor_id));
+      setDepartments(allDepts);
     } catch (err) {
       console.error(err);
     } finally {
@@ -73,6 +77,18 @@ export default function ProfessorDetailScreen({ navigation, route }) {
     finally { setProcessing(false); }
   };
 
+  const handleUpdateDepartment = async (deptId) => {
+    setProcessing(true);
+    try {
+      await ApiService.updateProfessor(professor.id, { department_id: deptId });
+      await fetchData();
+      setShowDeptChange(false);
+      const msg = "Department assignment updated!";
+      if (Platform.OS === 'web') alert(msg); else Alert.alert("Success", msg);
+    } catch (err) { alert("Update failed"); }
+    finally { setProcessing(false); }
+  };
+
   return (
     <View style={styles.container}>
       <ScreenHeader title="Faculty Profile" subtitle={professor.email} showBack onBack={() => navigation.goBack()} />
@@ -108,6 +124,36 @@ export default function ProfessorDetailScreen({ navigation, route }) {
             <View style={styles.resetForm}>
               <TextInput style={styles.input} placeholder="New faculty password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
               <Button title="Save Password" loading={processing} onPress={handleResetPassword} />
+            </View>
+          )}
+        </Card>
+
+        <Text style={styles.sectionTitle}>Department Management</Text>
+        <Card style={styles.infoCard}>
+          <TouchableOpacity style={styles.row} onPress={() => setShowDeptChange(!showDeptChange)}>
+            <View style={[styles.iconBox, { backgroundColor: theme.colors.primary + '15' }]}><Ionicons name="business" size={20} color={theme.colors.primary} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>ASSIGNED DEPARTMENT</Text>
+              <Text style={[styles.value, professor.department_name === 'None' && { color: theme.colors.error }]}>
+                {professor.department_name === 'None' ? 'NOT ASSIGNED (NONE)' : professor.department_name}
+              </Text>
+            </View>
+            <Ionicons name={showDeptChange ? "chevron-up" : "chevron-down"} size={20} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+          {showDeptChange && (
+            <View style={styles.resetForm}>
+              <Text style={styles.helperText}>Select new department assignment:</Text>
+              {departments.map(d => (
+                <TouchableOpacity 
+                  key={d.id} 
+                  style={[styles.deptOption, professor.department_id === d.id && styles.deptOptionSelected]} 
+                  onPress={() => handleUpdateDepartment(d.id)}
+                  disabled={processing}
+                >
+                  <Text style={[styles.deptOptionText, professor.department_id === d.id && styles.deptOptionTextSelected]}>{d.name}</Text>
+                  {professor.department_id === d.id && <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />}
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </Card>
@@ -180,6 +226,11 @@ const styles = StyleSheet.create({
   value: { fontSize: 15, fontWeight: '700', color: theme.colors.text, marginTop: 2 },
   resetForm: { marginTop: 16, gap: 8 },
   input: { backgroundColor: theme.colors.accent, padding: 12, borderRadius: 10, fontSize: 14, borderWidth: 1, borderColor: theme.colors.border },
+  helperText: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 8, fontStyle: 'italic' },
+  deptOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 10, backgroundColor: theme.colors.accent, marginBottom: 6, borderWidth: 1, borderColor: 'transparent' },
+  deptOptionSelected: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + '08' },
+  deptOptionText: { fontSize: 14, color: theme.colors.text, fontWeight: '500' },
+  deptOptionTextSelected: { color: theme.colors.primary, fontWeight: '700' },
   assignArea: { marginBottom: 20, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.primary, marginTop: 12 },
   moduleChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
   moduleChipText: { fontSize: 14, fontWeight: '600' },
