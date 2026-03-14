@@ -1,63 +1,110 @@
-# Campus Room Manager
+# RomeAI - Campus Room Manager
 
-A React Native (Expo) mobile app for university classroom management. Supports **Student**, **Professor**, and **Admin** roles with role-specific dashboards and features.
+**RomeAI** is a comprehensive university classroom and session management system. It features a React Native (Expo) mobile application and a Flask REST API backend. The system is designed to streamline room bookings, session scheduling, and attendance tracking for students, professors, and administrators.
 
-## Features
+## Developed By
+- **Yahya Bouchak**
+- **Student in Master SIIA**
+- **Faculty of Sciences (FP), Khouribga**
 
-- **Authentication**: Login, Register, Forgot Password (email/password)
-- **Student**: Dashboard (today’s classes, modules), weekly schedule, exam schedule, notifications, profile
-- **Professor**: Dashboard, create session (module, type, date/time, available rooms), view rooms, session management, profile
-- **Admin**: Dashboard (stats), room management, exam management, user management (students/professors), profile
+---
 
-## Tech stack
+## 🚀 Features
 
-- React Native (Expo)
-- React Navigation (native stack + bottom tabs)
-- Context API for auth and role
-- Ionicons
-- Theme: primary blue, white, light gray
+### 👨‍🎓 Student Role
+- **Personal Dashboard**: View today's classes and active modules.
+- **Schedules**: Access weekly session schedules and upcoming exam dates.
+- **Notifications**: Stay updated with real-time academic alerts.
+- **Profile**: Manage personal academic information.
 
-## Setup
+### 👨‍🏫 Professor Role
+- **Session Management**: Create, modify, or cancel teaching sessions.
+- **Room Availability**: Real-time view of available classrooms and amphitheatres.
+- **Attendance**: Track student attendance for both sessions and exams.
+- **Booking Requests**: Request specific rooms for extra sessions.
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### 🔑 Admin Role
+- **Central Dashboard**: Overview of campus statistics (total rooms, sessions, active users).
+- **User Management**: Create and manage Student and Professor accounts.
+- **Room Management**: Add, update, or remove classrooms with capacity and equipment details.
+- **Exam Management**: Schedule and publish exam timetables.
+- **Audit Logs**: Track changes to modules, sessions, and exams.
 
-2. **Assets (required by Expo)**  
-   Add these under `assets/` (or update `app.json` to remove/change paths):
-   - `icon.png` (1024×1024)
-   - `splash.png` (splash screen)
-   - `adaptive-icon.png` (Android adaptive icon)
+---
 
-   Or create a new Expo app and copy the `assets` folder from it:
-   ```bash
-   npx create-expo-app temp-app --template blank
-   cp -r temp-app/assets ./
-   ```
+## 🛠 Tech Stack
 
-3. **Start the app**
-   ```bash
-   npx expo start
-   ```
-   Then press `a` for Android or `i` for iOS simulator, or scan the QR code with Expo Go.
+- **Frontend**: React Native (Expo), React Navigation, Axios, Context API.
+- **Backend**: Python (Flask), Flask-SQLAlchemy, Flask-CORS.
+- **Database**: SQLite.
+- **Networking**: Ngrok (for local backend exposure).
 
-## How to test roles
+---
 
-On **Login**, choose the role (Student / Professor / Admin), enter any email and password, and tap **Sign In**. The app switches to the corresponding tab set for that role. Use **Logout** from the Profile tab to return to the login screen.
+## 📦 Installation & Setup
 
-## Project structure
+### 1. Backend Setup (Flask)
+The backend manages the database and provides the API.
 
-See **SCREENS_AND_NAVIGATION.md** for:
+```bash
+cd backend
+# Create a virtual environment (optional but recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-- Full list of screens and routes
-- Navigation structure (Auth stack + role-based bottom tabs)
-- UI layout notes
-- Component and file structure
+# Install dependencies
+pip install flask flask-sqlalchemy flask-cors
+```
 
-## Design
+**Run the server:**
+```bash
+python app.py
+```
+The server will start on `http://localhost:5000`.
 
-- Clean, card-based layout with consistent spacing
-- Bottom tab navigation per role
-- Primary: blue; secondary: white; accent: light gray
-- Cards for modules, rooms, sessions, and list items
+### 2. Ngrok Setup (Action Server Hosting)
+To allow the mobile app (on a physical device or simulator) to communicate with your local Flask server, you must expose it via **Ngrok**.
+
+1.  **Download & Install Ngrok**: [ngrok.com](https://ngrok.com/)
+2.  **Start Ngrok**:
+    ```bash
+    ngrok http 5000
+    ```
+3.  **Update Frontend API URL**:
+    - Copy the `Forwarding` URL provided by ngrok (e.g., `https://xxxx-xxxx.ngrok-free.app`).
+    - Open `src/services/api.js`.
+    - Update the `BASE_URL` constant:
+      ```javascript
+      const BASE_URL = 'https://xxxx-xxxx.ngrok-free.app/api';
+      ```
+
+### 3. Frontend Setup (Expo)
+```bash
+# Install Node dependencies
+npm install
+
+# Start the Expo development server
+npx expo start
+```
+Scan the QR code with the **Expo Go** app (Android) or use the iOS/Android simulator.
+
+---
+
+## 🧪 Testing Credentials
+The database is seeded with the following default accounts (Password: `Yahya2004@`):
+
+| Role | Email |
+| :--- | :--- |
+| **Admin** | `admin@test.com` |
+| **Professor** | `prof@test.com` |
+| **Student** | `student@test.com` |
+
+---
+
+## 📂 Project Structure
+- `backend/`: Flask application, models, and database logic.
+- `src/components/`: Reusable UI components (Cards, Buttons, etc.).
+- `src/screens/`: Role-specific screens (Admin, Professor, Student).
+- `src/navigation/`: Navigation stacks and tab configurations.
+- `src/services/api.js`: Axios configuration for backend communication.
+- `src/theme/`: Global styles, colors, and spacing.
