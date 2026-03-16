@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The Ngrok URL is defined as a constant for easy updates
-const BASE_URL = 'https://281c-196-112-77-64.ngrok-free.app/api';
+const BASE_URL = 'https://4570-196-112-77-64.ngrok-free.app/api';
 
 // Create the axios instance as a constant
 export const api = axios.create({
@@ -63,6 +63,7 @@ export const ApiService = {
   getRooms: () => api.get('/rooms').then(res => res.data),
   addRoom: (data) => api.post('/rooms', data).then(res => res.data),
   updateRoom: (id, data) => api.put(`/rooms/${id}`, data).then(res => res.data),
+  chatbot: (query, role, userId) => api.post('/chatbot', { query, role, user_id: userId }).then(res => res.data),
 };
 
 // Global interceptor for consistent error handling

@@ -8,6 +8,7 @@ import { Card } from '../../components/Card';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatCard } from '../../components/StatCard';
 import { ApiService } from '../../services/api';
+import Chatbot from '../../components/Chatbot';
 
 const getNavigatorDays = () => {
   const days = [];
@@ -78,59 +79,62 @@ export default function ProfessorDashboardScreen({ navigation }) {
   if (loading && !myDepartments.length && !allSessions.length) return <View style={styles.center}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
-      <ScreenHeader title={`Welcome, Prof. ${user?.name?.split(' ')[0]}`} subtitle="Departmental Oversight" />
-      <View style={styles.content}>
-        <View style={styles.statsRow}>
-          <StatCard title="Today's Load" value={stats.today.toString()} icon="time" color={theme.colors.primary} />
-          <StatCard title="My Modules" value={stats.total.toString()} icon="book" color={theme.colors.success} />
+    <View style={{ flex: 1 }}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
+        <ScreenHeader title={`Welcome, Prof. ${user?.name?.split(' ')[0]}`} subtitle="Departmental Oversight" />
+        <View style={styles.content}>
+          <View style={styles.statsRow}>
+            <StatCard title="Today's Load" value={stats.today.toString()} icon="time" color={theme.colors.primary} />
+            <StatCard title="My Modules" value={stats.total.toString()} icon="book" color={theme.colors.success} />
+          </View>
+
+          <Text style={styles.sectionTitle}>Agenda Navigator</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roulette}>
+            {navigatorDays.map((d, index) => (
+              <TouchableOpacity key={d.id} style={[styles.dayTab, selectedDayIndex === index && styles.activeDayTab]} onPress={() => setSelectedDayIndex(index)}>
+                <Text style={[styles.dayLabel, selectedDayIndex === index && styles.activeDayLabel]}>{d.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {displayedAgenda.length === 0 ? (
+            <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for {activeDay.label}.</Text></Card>
+          ) : (
+            displayedAgenda.map(session => (
+              <Card key={session.id} style={styles.agendaCard} onPress={() => navigation.navigate('ProfessorModuleDetail', { module: { id: session.module_id, name: session.module_name } })}>
+                <View style={styles.agendaRow}>
+                  <View style={styles.timeLabel}><Text style={styles.startText}>{session.start_time}</Text></View>
+                  <View style={styles.agendaBody}>
+                    <Text style={styles.agendaModule}>{session.module_name}</Text>
+                    <Text style={styles.locText}>{session.room_name} · {session.type}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => navigation.navigate('AttendanceManagement', { session })}>
+                    <Ionicons name="checkbox" size={24} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))
+          )}
+
+          <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Your Academic Departments</Text>
+          {myDepartments.length === 0 ? <Text style={styles.emptyText}>No departments assigned.</Text> :
+            myDepartments.map(dep => (
+              <Card key={dep.id} style={styles.depCard} onPress={() => navigation.navigate('ProfessorFilieres', { department: dep })}>
+                <View style={styles.row}>
+                  <View style={styles.iconBox}><Ionicons name="business" size={22} color={theme.colors.primary} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.depName}>{dep.name}</Text>
+                    <Text style={styles.depSub}>Manage your programs here</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                </View>
+              </Card>
+            ))
+          }
         </View>
-
-        <Text style={styles.sectionTitle}>Agenda Navigator</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roulette}>
-          {navigatorDays.map((d, index) => (
-            <TouchableOpacity key={d.id} style={[styles.dayTab, selectedDayIndex === index && styles.activeDayTab]} onPress={() => setSelectedDayIndex(index)}>
-              <Text style={[styles.dayLabel, selectedDayIndex === index && styles.activeDayLabel]}>{d.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {displayedAgenda.length === 0 ? (
-          <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for {activeDay.label}.</Text></Card>
-        ) : (
-          displayedAgenda.map(session => (
-            <Card key={session.id} style={styles.agendaCard} onPress={() => navigation.navigate('ProfessorModuleDetail', { module: { id: session.module_id, name: session.module_name } })}>
-              <View style={styles.agendaRow}>
-                <View style={styles.timeLabel}><Text style={styles.startText}>{session.start_time}</Text></View>
-                <View style={styles.agendaBody}>
-                  <Text style={styles.agendaModule}>{session.module_name}</Text>
-                  <Text style={styles.locText}>{session.room_name} · {session.type}</Text>
-                </View>
-                <TouchableOpacity onPress={() => navigation.navigate('AttendanceManagement', { session })}>
-                  <Ionicons name="checkbox" size={24} color={theme.colors.primary} />
-                </TouchableOpacity>
-              </View>
-            </Card>
-          ))
-        )}
-
-        <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Your Academic Departments</Text>
-        {myDepartments.length === 0 ? <Text style={styles.emptyText}>No departments assigned.</Text> :
-          myDepartments.map(dep => (
-            <Card key={dep.id} style={styles.depCard} onPress={() => navigation.navigate('ProfessorFilieres', { department: dep })}>
-              <View style={styles.row}>
-                <View style={styles.iconBox}><Ionicons name="business" size={22} color={theme.colors.primary} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.depName}>{dep.name}</Text>
-                  <Text style={styles.depSub}>Manage your programs here</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-              </View>
-            </Card>
-          ))
-        }
-      </View>
-    </ScrollView>
+      </ScrollView>
+      <Chatbot />
+    </View>
   );
 }
 

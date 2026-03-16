@@ -8,6 +8,7 @@ import { Card } from '../../components/Card';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatCard } from '../../components/StatCard';
 import { ApiService } from '../../services/api';
+import Chatbot from '../../components/Chatbot';
 
 export default function StudentDashboardScreen({ navigation }) {
   const { user } = useAuth();
@@ -58,73 +59,76 @@ export default function StudentDashboardScreen({ navigation }) {
   useEffect(() => { if (isFocused) fetchData(); }, [isFocused, fetchData]);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
-      <ScreenHeader title={`Hi, ${user?.name?.split(' ')[0]}!`} subtitle={`Program: ${user?.filiere_name || 'Assigned'}`} />
-      <View style={styles.content}>
-        <View style={styles.statsRow}>
-          <StatCard title="Today's Classes" value={todayClasses.length.toString()} icon="calendar" color={theme.colors.primary} />
-          <StatCard title="Total Modules" value={myModules.length.toString()} icon="library" color={theme.colors.success} />
-        </View>
+    <View style={{ flex: 1 }}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} color={theme.colors.primary} />}>
+        <ScreenHeader title={`Hi, ${user?.name?.split(' ')[0]}!`} subtitle={`Program: ${user?.filiere_name || 'Assigned'}`} />
+        <View style={styles.content}>
+          <View style={styles.statsRow}>
+            <StatCard title="Today's Classes" value={todayClasses.length.toString()} icon="calendar" color={theme.colors.primary} />
+            <StatCard title="Total Modules" value={myModules.length.toString()} icon="library" color={theme.colors.success} />
+          </View>
 
-        <Text style={styles.sectionTitle}>Today's Schedule</Text>
-        {!Array.isArray(todayClasses) || todayClasses.length === 0 ? (
-          <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for today.</Text></Card>
-        ) : (
-          todayClasses.map((c) => (
-            <Card key={c.id} style={styles.scheduleCard} onPress={() => navigation.navigate('SessionDetail', { session: c })}>
-              <View style={styles.cardHeader}>
-                <View style={styles.moduleInfo}>
-                  <Text style={styles.moduleTitle}>{c.module_name}</Text>
-                  <Text style={styles.professorName}>{c.professor_name}</Text>
-                </View>
-                <View style={styles.typeBadge}><Text style={styles.typeText}>{c.type}</Text></View>
-              </View>
-              <View style={styles.cardFooter}>
-                <View style={styles.infoItem}><Ionicons name="location-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.room_name}</Text></View>
-                <View style={styles.infoItem}><Ionicons name="time-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.start_time} - {c.end_time}</Text></View>
-              </View>
-            </Card>
-          ))
-        )}
-
-        {recentUpdates.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Updates</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
-                <Text style={styles.viewAll}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <Card noPadding style={styles.updateCard}>
-              {recentUpdates.map((update, i) => (
-                <View key={i} style={[styles.updateItem, i === recentUpdates.length - 1 && styles.lastUpdate]}>
-                  <View style={[styles.dot, { backgroundColor: update.session_id ? theme.colors.primary : theme.colors.error }]} />
-                  <Text style={styles.updateText} numberOfLines={1}>
-                    {update.field === 'CREATION' ? 'New scheduled activity' : `Changed ${update.field.toLowerCase()}`}
-                  </Text>
-                  <Text style={styles.updateTime}>{new Date(update.time).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
-                </View>
-              ))}
-            </Card>
-          </>
-        )}
-
-        <Text style={styles.sectionTitle}>My Learning Path</Text>
-        <Card noPadding>
-          {!Array.isArray(myModules) || myModules.length === 0 ? (
-            <View style={styles.emptyPadding}><Text style={styles.emptyText}>No modules assigned yet.</Text></View>
+          <Text style={styles.sectionTitle}>Today's Schedule</Text>
+          {!Array.isArray(todayClasses) || todayClasses.length === 0 ? (
+            <Card style={styles.emptyCard}><Text style={styles.emptyText}>No classes scheduled for today.</Text></Card>
           ) : (
-            myModules.map((m, i, arr) => (
-              <TouchableOpacity key={m.id} style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]} onPress={() => navigation.navigate('ModuleHistory', { module: m })}>
-                <View style={styles.moduleIcon}><Ionicons name="journal" size={20} color={theme.colors.primary} /></View>
-                <Text style={styles.moduleName}>{m.name}</Text>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-              </TouchableOpacity>
+            todayClasses.map((c) => (
+              <Card key={c.id} style={styles.scheduleCard} onPress={() => navigation.navigate('SessionDetail', { session: c })}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.moduleInfo}>
+                    <Text style={styles.moduleTitle}>{c.module_name}</Text>
+                    <Text style={styles.professorName}>{c.professor_name}</Text>
+                  </View>
+                  <View style={styles.typeBadge}><Text style={styles.typeText}>{c.type}</Text></View>
+                </View>
+                <View style={styles.cardFooter}>
+                  <View style={styles.infoItem}><Ionicons name="location-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.room_name}</Text></View>
+                  <View style={styles.infoItem}><Ionicons name="time-outline" size={14} color={theme.colors.primary} /><Text style={styles.infoText}>{c.start_time} - {c.end_time}</Text></View>
+                </View>
+              </Card>
             ))
           )}
-        </Card>
-      </View>
-    </ScrollView>
+
+          {recentUpdates.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Updates</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+                  <Text style={styles.viewAll}>View All</Text>
+                </TouchableOpacity>
+              </View>
+              <Card noPadding style={styles.updateCard}>
+                {recentUpdates.map((update, i) => (
+                  <View key={i} style={[styles.updateItem, i === recentUpdates.length - 1 && styles.lastUpdate]}>
+                    <View style={[styles.dot, { backgroundColor: update.session_id ? theme.colors.primary : theme.colors.error }]} />
+                    <Text style={styles.updateText} numberOfLines={1}>
+                      {update.field === 'CREATION' ? 'New scheduled activity' : `Changed ${update.field.toLowerCase()}`}
+                    </Text>
+                    <Text style={styles.updateTime}>{new Date(update.time).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                  </View>
+                ))}
+              </Card>
+            </>
+          )}
+
+          <Text style={styles.sectionTitle}>My Learning Path</Text>
+          <Card noPadding>
+            {!Array.isArray(myModules) || myModules.length === 0 ? (
+              <View style={styles.emptyPadding}><Text style={styles.emptyText}>No modules assigned yet.</Text></View>
+            ) : (
+              myModules.map((m, i, arr) => (
+                <TouchableOpacity key={m.id} style={[styles.moduleItem, i === arr.length - 1 && styles.lastItem]} onPress={() => navigation.navigate('ModuleHistory', { module: m })}>
+                  <View style={styles.moduleIcon}><Ionicons name="journal" size={20} color={theme.colors.primary} /></View>
+                  <Text style={styles.moduleName}>{m.name}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                </TouchableOpacity>
+              ))
+            )}
+          </Card>
+        </View>
+      </ScrollView>
+      <Chatbot />
+    </View>
   );
 }
 

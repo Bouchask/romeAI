@@ -25,6 +25,178 @@ def login():
         return jsonify({"message": "Invalid password."}), 401
     return jsonify({"message": "Account not found."}), 404
 
+# --- Chatbot ---
+@api_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    try:
+        data = request.json
+        query = data.get('query', '').lower()
+        role = data.get('role', 'student')
+        user_id = data.get('user_id')
+        
+        print(f"Chatbot Request: Role={role}, UserID={user_id}, Query='{query}'")
+
+        # Intent Detection (Simulated RAG/NLP)
+        if role == 'professor':
+            prof = Professor.query.get(user_id)
+            if not prof: 
+                print("Error: Professor not found")
+                return jsonify({"answer": "I couldn't verify your professor profile."})
+
+            if 'available' in query or 'room' in query or 'salle' in query:
+                # Enhanced filtering: wifi, projector, and specific type (Amphi, TD, TP, etc.)
+                needs_wifi = 'wifi' in query
+                needs_projector = 'projector' in query or 'videoprojecteur' in query
+                
+                rooms_query = Room.query.filter_by(status='active')
+                
+                # Dynamic type detection
+                requested_type = None
+                if 'amphi' in query: requested_type = 'Amphi'
+                elif 'td' in query: requested_type = 'TD'
+                elif 'tp' in query: requested_type = 'TP'
+                elif 'classroom' in query or 'classe' in query: requested_type = 'Classroom'
+                
+                if requested_type:
+                    rooms_query = rooms_query.filter(Room.type.ilike(f'%{requested_type}%'))
+                
+                rooms = rooms_query.all()
+                available = []
+                for r in rooms:
+                    if needs_wifi and not r.has_wifi: continue
+                    if needs_projector and not r.has_projector: continue
+                    available.append(f"- {r.name} ({r.type}, {r.capacity} seats{', Wifi' if r.has_wifi else ''}{', Projector' if r.has_projector else ''})")
+                
+                if not available: 
+                    msg = f"No available {requested_type if requested_type else 'rooms'} match those requirements."
+                    return jsonify({"answer": msg})
+                return jsonify({"answer": f"Available {requested_type if requested_type else 'Rooms'}:\n" + "\n".join(available)})
+
+            if 'student' in query or 'list' in query:
+                # Find students in a specific filiere
+                filieres = Filiere.query.all()
+                target_filiere = None
+                for f in filieres:
+                    if f.name.lower() in query:
+                        target_filiere = f
+                        break
+                
+                if target_filiere:
+                    students = Student.query.filter_by(filiere_id=target_filiere.id).all()
+                    if not students: return jsonify({"answer": f"No students found enrolled in {target_filiere.name}."})
+                    resp = f"Students in {target_filiere.name}:\n"
+                    for s in students: resp += f"- {s.name} ({s.registration_number})\n"
+                    return jsonify({"answer": resp.strip()})
+                else:
+                    return jsonify({"answer": "Please specify the name of the program (e.g., 'list students for Computer Science')."})
+
+            if 'attendance' in query or 'presence' in query:
+                # Get attendance for a specific session or module
+                modules = Module.query.filter_by(professor_id=prof.id).all()
+                target_module = None
+                for m in modules:
+                    if m.name.lower() in query:
+                        target_module = m
+                        break
+                
+                if target_module:
+                    sessions = Session.query.filter_by(module_id=target_module.id).all()
+                    if not sessions: return jsonify({"answer": f"No sessions have been recorded yet for {target_module.name}."})
+                    
+                    resp = f"Attendance Summary for {target_module.name}:\n"
+                    for s in sessions:
+                        count = Attendance.query.filter_by(session_id=s.id, status='present').count()
+                        resp += f"- Session {s.date or s.day}: {count} students present\n"
+                    return jsonify({"answer": resp.strip()})
+                else:
+                    return jsonify({"answer": "Which module would you like the attendance list for?"})
+
+            if 'exam' in query:
+                # List exams for modules taught by this professor
+                my_modules = Module.query.filter_by(professor_id=prof.id).all()
+                m_ids = [m.id for m in my_modules]
+                exams = Exam.query.filter(Exam.module_id.in_(m_ids)).all()
+                
+                if not exams: return jsonify({"answer": "You have no upcoming exams scheduled for your modules."})
+                
+                resp = "Your Upcoming Exam Schedule:\n"
+                for e in exams:
+                    resp += f"- {e.module_obj.name} ({e.type}): {e.date} at {e.start_time} in {e.room_obj.name}\n"
+                return jsonify({"answer": resp.strip()})
+
+        elif role == 'student':
+            student = Student.query.get(user_id)
+            if not student: 
+                print("Error: Student not found")
+                return jsonify({"answer": "I couldn't verify your student profile."})
+
+            if 'exam' in query:
+                # Get exams for student's filiere
+                exams = Exam.query.join(Module).filter(Module.filiere_id == student.filiere_id).all()
+                if not exams: return jsonify({"answer": "No upcoming exams found for your modules."})
+                
+                response = "Upcoming Exams:\n"
+                for e in exams:
+                    response += f"- {e.module_obj.name} — {e.date} — Room {e.room_obj.name}\n"
+                return jsonify({"answer": response.strip()})
+            
+            if 'module' in query and ('list' in query or 'my' in query or 'what are' in query):
+                modules = Module.query.filter_by(filiere_id=student.filiere_id).all()
+                if not modules: return jsonify({"answer": "You aren't enrolled in any modules yet."})
+                resp = "Your Enrolled Modules:\n"
+                for m in modules: resp += f"- {m.name} (Prof. {m.professor_obj.name if m.professor_obj else 'TBA'})\n"
+                return jsonify({"answer": resp.strip()})
+
+            if 'attendance' in query or 'presence' in query:
+                # Try to find a specific module name in the query
+                modules = Module.query.filter_by(filiere_id=student.filiere_id).all()
+                target_module = None
+                for m in modules:
+                    if m.name.lower() in query:
+                        target_module = m
+                        break
+                
+                if target_module:
+                    # Count attendance for this module
+                    sessions = Session.query.filter_by(module_id=target_module.id).all()
+                    s_ids = [s.id for s in sessions]
+                    atts = Attendance.query.filter(Attendance.student_id == student.id, Attendance.session_id.in_(s_ids)).all()
+                    present = sum(1 for a in atts if a.status == 'present')
+                    total = len(sessions)
+                    return jsonify({"answer": f"Attendance for {target_module.name}:\nYou have been present for {present} out of {total} sessions recorded."})
+                else:
+                    # General attendance overview
+                    atts = Attendance.query.filter_by(student_id=student.id).all()
+                    present = sum(1 for a in atts if a.status == 'present')
+                    return jsonify({"answer": f"You have a total of {present} 'Present' marks across all your modules. For a specific module, please ask: 'What is my attendance in [Module Name]?'"})
+
+            if 'session' in query or 'schedule' in query or 'class' in query:
+                # Get upcoming sessions for today or tomorrow
+                now = datetime.now()
+                today_name = now.strftime('%A')
+                sessions = Session.query.join(Module).filter(Module.filiere_id == student.filiere_id, Session.day == today_name).all()
+                
+                if not sessions: return jsonify({"answer": f"You have no sessions scheduled for today ({today_name}). Enjoy your free time!"})
+                
+                resp = f"Today's Sessions ({today_name}):\n"
+                for s in sessions:
+                    resp += f"- {s.module_obj.name} at {s.start_time} (Room {s.room_obj.name})\n"
+                return jsonify({"answer": resp.strip()})
+                
+            if 'where' in query or 'room' in query:
+                modules = Module.query.all()
+                for m in modules:
+                    if m.name.lower() in query:
+                        session = Session.query.filter_by(module_id=m.id).first()
+                        if session:
+                            return jsonify({"answer": f"{m.name} is usually held in Room {session.room_obj.name} at {session.start_time}."})
+                return jsonify({"answer": "I couldn't find a room for that module. Could you tell me the exact module name?"})
+
+        return jsonify({"answer": "I'm not sure how to help with that. Try asking about 'available rooms' or 'upcoming exams'."})
+    except Exception as e:
+        print(f"Chatbot Exception: {str(e)}")
+        return jsonify({"answer": "Oops! Something went wrong on my end. Please try again later."}), 500
+
 # --- Departments ---
 @api_bp.route('/departments', methods=['GET'])
 def get_departments():
