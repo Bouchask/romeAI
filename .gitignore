@@ -1,0 +1,127 @@
+# ======================
+# OS / Editor Files
+# ======================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ======================
+# Node.js / npm
+# ======================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Expo
+.expo/
+web-build/
+dist/
+
+# ======================
+# Python
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.htmlcov/
+.tox/
+.nox/
+.env
+.venv
+env/
+venv/
+ENV/
+
+# ======================
+# Flask / Backend
+# ======================
+backend/instance/
+*.sqlite
+*.db
+*.log
+
+# ======================
+# SQLite Database Files
+# ======================
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+*.db
+*.sqlite
+*.sqlite3
+
+# ======================
+# Logs and Cache
+# ======================
+*.log
+*.cache
+
+# ======================
+# React Native / Metro
+# ======================
+metro-bundler-config.js
+
+# ======================
+# Environment Variables
+# ======================
+.env
+.env.local
+.env.*.local
+
+# ======================
+# Build Output
+# ======================
+android/
+ios/
+build/
+
+# ======================
+# Testing
+# ======================
+/coverage/
+/nyc_output/
+
+# ======================
+# Misc
+# ======================
+*.bak
+*.tmp
+*.backup
+*.orig
+*.rej
+
+# Patches (if using patch-package)
+patches/
